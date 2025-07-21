@@ -691,16 +691,18 @@ func run(cmd *cobra.Command, _ []string) {
 	if clusterRegistryConfigArgs != nil {
 		allowedRegistries, blockedRegistries, insecureRegistries,
 			additionalTrustedCa, allowedRegistriesForImport,
-			platformAllowlist := clusterregistryconfig.GetClusterRegistryConfigArgs(
+			platformAllowlist, imageTagMirrorSets, imageDigestMirrorSources := clusterregistryconfig.GetClusterRegistryConfigArgs(
 			clusterRegistryConfigArgs)
 
 		// prompt for a warning if any registry config field is set
 		if allowedRegistries != nil || blockedRegistries != nil || insecureRegistries != nil ||
-			additionalTrustedCa != "" || allowedRegistriesForImport != "" || platformAllowlist != "" {
+			additionalTrustedCa != "" || allowedRegistriesForImport != "" || platformAllowlist != "" ||
+			imageTagMirrorSets != "" || imageDigestMirrorSources != "" {
 			if PromptUserToAcceptRegistryChange(r) {
 				clusterConfig, err = BuildClusterConfigWithRegistry(clusterConfig, allowedRegistries,
 					blockedRegistries, insecureRegistries,
-					additionalTrustedCa, allowedRegistriesForImport, platformAllowlist)
+					additionalTrustedCa, allowedRegistriesForImport, platformAllowlist,
+					imageTagMirrorSets, imageDigestMirrorSources)
 			}
 			if err != nil {
 				r.Reporter.Errorf("%s", err)
@@ -1102,11 +1104,14 @@ func PromptUserToAcceptRegistryChange(r *rosa.Runtime) bool {
 
 func BuildClusterConfigWithRegistry(clusterConfig ocm.Spec, allowedRegistries []string,
 	blockedRegistries []string, insecureRegistries []string, additionalTrustedCa string,
-	allowedRegistriesForImport string, platformAllowlist string) (ocm.Spec, error) {
+	allowedRegistriesForImport string, platformAllowlist string,
+	imageTagMirrorSets string, imageDigestMirrorSources string) (ocm.Spec, error) {
 	clusterConfig.AllowedRegistries = allowedRegistries
 	clusterConfig.BlockedRegistries = blockedRegistries
 	clusterConfig.InsecureRegistries = insecureRegistries
 	clusterConfig.PlatformAllowlist = platformAllowlist
+	clusterConfig.ImageTagMirrorSets = imageTagMirrorSets
+	clusterConfig.ImageDigestMirrorSources = imageDigestMirrorSources
 	if additionalTrustedCa != "" {
 		ca, err := clusterregistryconfig.BuildAdditionalTrustedCAFromInputFile(additionalTrustedCa)
 		if err != nil {
@@ -1117,6 +1122,27 @@ func BuildClusterConfigWithRegistry(clusterConfig ocm.Spec, allowedRegistries []
 		clusterConfig.AdditionalTrustedCa = ca
 		clusterConfig.AdditionalTrustedCaFile = additionalTrustedCa
 	}
+
+	if imageTagMirrorSets != "" {
+		itmsData, err := clusterregistryconfig.BuildImageTagMirrorSetsFromInputFile(imageTagMirrorSets)
+		if err != nil {
+			return clusterConfig, fmt.Errorf(
+				"Failed to build ImageTagMirrorSets from file %s, got error: %s",
+				imageTagMirrorSets, err)
+		}
+		clusterConfig.ImageTagMirrorSetsData = itmsData
+	}
+
+	if imageDigestMirrorSources != "" {
+		idmsData, err := clusterregistryconfig.BuildImageDigestMirrorSourcesFromInputFile(imageDigestMirrorSources)
+		if err != nil {
+			return clusterConfig, fmt.Errorf(
+				"Failed to build ImageDigestMirrorSources from file %s, got error: %s",
+				imageDigestMirrorSources, err)
+		}
+		clusterConfig.ImageDigestMirrorSourcesData = idmsData
+	}
+
 	clusterConfig.AllowedRegistriesForImport = allowedRegistriesForImport
 	return clusterConfig, nil
 }

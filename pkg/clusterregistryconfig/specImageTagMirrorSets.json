@@ -1,0 +1,19 @@
+{
+  "imageTagMirrorSets": [
+    {
+      "name": "registry-mirror-1",
+      "source": "registry.redhat.io",
+      "mirrors": [
+        "mirror.example.com:5000/redhat",
+        "mirror2.example.com/redhat"
+      ]
+    },
+    {
+      "name": "registry-mirror-2", 
+      "source": "quay.io",
+      "mirrors": [
+        "mirror.example.com:5000/quay"
+      ]
+    }
+  ]
+} 

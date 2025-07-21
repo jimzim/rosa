@@ -23,6 +23,8 @@ const (
 	platformAllowlistFlag          = "registry-config-platform-allowlist"
 	additionalTrustedCaPathFlag    = "registry-config-additional-trusted-ca"
 	allowedRegistriesForImportFlag = "registry-config-allowed-registries-for-import"
+	imageTagMirrorSetsFlag         = "registry-config-image-tag-mirror-sets"
+	imageDigestMirrorSourcesFlag   = "registry-config-image-digest-mirror-sources"
 )
 
 type ClusterRegistryConfigArgs struct {
@@ -32,6 +34,8 @@ type ClusterRegistryConfigArgs struct {
 	allowedRegistriesForImport string
 	platformAllowlist          string
 	additionalTrustedCa        string
+	imageTagMirrorSets         string
+	imageDigestMirrorSources   string
 }
 
 func AddClusterRegistryConfigFlags(cmd *cobra.Command) *ClusterRegistryConfigArgs {
@@ -84,14 +88,28 @@ func AddClusterRegistryConfigFlags(cmd *cobra.Command) *ClusterRegistryConfigArg
 		"A json file containing the registry hostname as the key,"+
 			" and the PEM-encoded certificate as the value, for each additional registry CA to trust.")
 
+	cmd.Flags().StringVar(
+		&args.imageTagMirrorSets,
+		imageTagMirrorSetsFlag,
+		"",
+		"A json file containing ImageTagMirrorSets configuration for mirroring images by tag. "+
+			"Each entry defines source registries and their mirror destinations.")
+
+	cmd.Flags().StringVar(
+		&args.imageDigestMirrorSources,
+		imageDigestMirrorSourcesFlag,
+		"",
+		"A json file containing ImageDigestMirrorSources configuration for mirroring images by digest. "+
+			"Each entry defines source registries and their mirror destinations.")
+
 	return args
 }
 
 func GetClusterRegistryConfigArgs(args *ClusterRegistryConfigArgs) (
-	[]string, []string, []string, string, string, string) {
+	[]string, []string, []string, string, string, string, string, string) {
 	return args.allowedRegistries, args.blockedRegistries,
 		args.insecureRegistries, args.additionalTrustedCa, args.allowedRegistriesForImport,
-		args.platformAllowlist
+		args.platformAllowlist, args.imageTagMirrorSets, args.imageDigestMirrorSources
 }
 
 func GetClusterRegistryConfigOptions(cmd *pflag.FlagSet,
@@ -115,6 +133,8 @@ func GetClusterRegistryConfigOptions(cmd *pflag.FlagSet,
 	result.additionalTrustedCa = args.additionalTrustedCa
 	result.allowedRegistriesForImport = args.allowedRegistriesForImport
 	result.platformAllowlist = args.platformAllowlist
+	result.imageTagMirrorSets = args.imageTagMirrorSets
+	result.imageDigestMirrorSources = args.imageDigestMirrorSources
 
 	if !IsClusterRegistryConfigSetViaCLI(cmd) && !interactive.Enabled() {
 		return nil, nil
@@ -235,6 +255,24 @@ func GetClusterRegistryConfigOptions(cmd *pflag.FlagSet,
 		if err != nil {
 			return nil, fmt.Errorf("Expected a valid certificate: %s", err)
 		}
+
+		result.imageTagMirrorSets, err = interactive.GetString(interactive.Input{
+			Question: "Image Tag Mirror Sets",
+			Help:     cmd.Lookup(imageTagMirrorSetsFlag).Usage,
+			Default:  args.imageTagMirrorSets,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("Expected a valid ImageTagMirrorSets file path: %s", err)
+		}
+
+		result.imageDigestMirrorSources, err = interactive.GetString(interactive.Input{
+			Question: "Image Digest Mirror Sources",
+			Help:     cmd.Lookup(imageDigestMirrorSourcesFlag).Usage,
+			Default:  args.imageDigestMirrorSources,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("Expected a valid ImageDigestMirrorSources file path: %s", err)
+		}
 	}
 	if err := ocm.ValidateAllowedRegistriesForImport(result.allowedRegistriesForImport); err != nil {
 		return nil, fmt.Errorf("Expected valid allowed registries for import values: %v", err)
@@ -257,7 +295,8 @@ func GetClusterRegistryConfigQuestion(cluster *cmv1.Cluster) string {
 func IsClusterRegistryConfigSetViaCLI(cmd *pflag.FlagSet) bool {
 	for _, parameter := range []string{allowedRegistriesFlag,
 		insecureRegistriesFlag, blockedRegistriesFlag, platformAllowlistFlag,
-		allowedRegistriesForImportFlag, additionalTrustedCaPathFlag} {
+		allowedRegistriesForImportFlag, additionalTrustedCaPathFlag,
+		imageTagMirrorSetsFlag, imageDigestMirrorSourcesFlag} {
 
 		if cmd.Changed(parameter) {
 			return true
@@ -306,6 +345,18 @@ func BuildRegistryConfigOptions(spec ocm.Spec) string {
 			shellescape.Quote(spec.AllowedRegistriesForImport))
 	}
 
+	if spec.ImageTagMirrorSets != "" {
+		command += fmt.Sprintf(" --%s %s",
+			imageTagMirrorSetsFlag,
+			shellescape.Quote(spec.ImageTagMirrorSets))
+	}
+
+	if spec.ImageDigestMirrorSources != "" {
+		command += fmt.Sprintf(" --%s %s",
+			imageDigestMirrorSourcesFlag,
+			shellescape.Quote(spec.ImageDigestMirrorSources))
+	}
+
 	return command
 }
 
@@ -331,4 +382,42 @@ func BuildAdditionalTrustedCAFromInputFile(specPath string) (map[string]string, 
 		return nil, fmt.Errorf("failed to build additional trusted certificate: %v", err)
 	}
 	return ca.AdditionalTrustedCa(), nil
+}
+
+// BuildImageTagMirrorSetsFromInputFile processes the ImageTagMirrorSets JSON file and validates its format
+func BuildImageTagMirrorSetsFromInputFile(specPath string) (map[string]interface{}, error) {
+	if specPath == "" {
+		return nil, nil
+	}
+
+	specJson, err := input.UnmarshalInputFile(specPath)
+	if err != nil {
+		return nil, fmt.Errorf("expected a valid ImageTagMirrorSets spec file: %v", err)
+	}
+
+	// Basic validation - ensure we have the expected structure
+	if _, ok := specJson["imageTagMirrorSets"]; !ok {
+		return nil, fmt.Errorf("ImageTagMirrorSets spec file must contain 'imageTagMirrorSets' field")
+	}
+
+	return specJson, nil
+}
+
+// BuildImageDigestMirrorSourcesFromInputFile processes the ImageDigestMirrorSources JSON file and validates its format
+func BuildImageDigestMirrorSourcesFromInputFile(specPath string) (map[string]interface{}, error) {
+	if specPath == "" {
+		return nil, nil
+	}
+
+	specJson, err := input.UnmarshalInputFile(specPath)
+	if err != nil {
+		return nil, fmt.Errorf("expected a valid ImageDigestMirrorSources spec file: %v", err)
+	}
+
+	// Basic validation - ensure we have the expected structure
+	if _, ok := specJson["imageDigestMirrorSources"]; !ok {
+		return nil, fmt.Errorf("ImageDigestMirrorSources spec file must contain 'imageDigestMirrorSources' field")
+	}
+
+	return specJson, nil
 }

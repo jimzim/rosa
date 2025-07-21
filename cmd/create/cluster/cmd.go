@@ -509,7 +509,7 @@ func initFlags(cmd *cobra.Command) {
 	flags.BoolVar(&args.enableCustomerManagedKey,
 		"enable-customer-managed-key",
 		false,
-		"Enable to specify your KMS Key to encrypt EBS instance volumes. By default account’s default "+
+		"Enable to specify your KMS Key to encrypt EBS instance volumes. By default account's default "+
 			"KMS key for that particular region is used.")
 
 	flags.StringVar(&args.kmsKeyARN,
@@ -3435,12 +3435,14 @@ func run(cmd *cobra.Command, _ []string) {
 	if clusterRegistryConfigArgs != nil {
 		allowedRegistries, blockedRegistries, insecureRegistries,
 			additionalTrustedCa, allowedRegistriesForImport,
-			platformAllowlist := clusterregistryconfig.GetClusterRegistryConfigArgs(
+			platformAllowlist, imageTagMirrorSets, imageDigestMirrorSources := clusterregistryconfig.GetClusterRegistryConfigArgs(
 			clusterRegistryConfigArgs)
 		clusterConfig.AllowedRegistries = allowedRegistries
 		clusterConfig.BlockedRegistries = blockedRegistries
 		clusterConfig.InsecureRegistries = insecureRegistries
 		clusterConfig.PlatformAllowlist = platformAllowlist
+		clusterConfig.ImageTagMirrorSets = imageTagMirrorSets
+		clusterConfig.ImageDigestMirrorSources = imageDigestMirrorSources
 
 		if additionalTrustedCa != "" {
 			ca, err := clusterregistryconfig.BuildAdditionalTrustedCAFromInputFile(additionalTrustedCa)
@@ -3451,6 +3453,25 @@ func run(cmd *cobra.Command, _ []string) {
 			clusterConfig.AdditionalTrustedCa = ca
 			clusterConfig.AdditionalTrustedCaFile = additionalTrustedCa
 		}
+
+		if imageTagMirrorSets != "" {
+			itmsData, err := clusterregistryconfig.BuildImageTagMirrorSetsFromInputFile(imageTagMirrorSets)
+			if err != nil {
+				r.Reporter.Errorf("Failed to build ImageTagMirrorSets from file %s, got error: %s", imageTagMirrorSets, err)
+				os.Exit(1)
+			}
+			clusterConfig.ImageTagMirrorSetsData = itmsData
+		}
+
+		if imageDigestMirrorSources != "" {
+			idmsData, err := clusterregistryconfig.BuildImageDigestMirrorSourcesFromInputFile(imageDigestMirrorSources)
+			if err != nil {
+				r.Reporter.Errorf("Failed to build ImageDigestMirrorSources from file %s, got error: %s", imageDigestMirrorSources, err)
+				os.Exit(1)
+			}
+			clusterConfig.ImageDigestMirrorSourcesData = idmsData
+		}
+
 		clusterConfig.AllowedRegistriesForImport = allowedRegistriesForImport
 	}
 

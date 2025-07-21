@@ -53,6 +53,44 @@ var _ = Describe("Cluster Registry Config tests", func() {
 		})
 	})
 
+	Context("BuildImageTagMirrorSetsFromInputFile", func() {
+		It("OK: should work with proper json format", func() {
+			itmsPath := "specImageTagMirrorSets.json"
+			itms, err := BuildImageTagMirrorSetsFromInputFile(itmsPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(itms["imageTagMirrorSets"]).ToNot(BeNil())
+		})
+		It("KO: fail if the spec file is invalid", func() {
+			_, err := BuildImageTagMirrorSetsFromInputFile("not-exist")
+			Expect(err).To(MatchError(
+				"expected a valid ImageTagMirrorSets spec file: open not-exist: no such file or directory"))
+		})
+		It("OK: return nil if empty path", func() {
+			itms, err := BuildImageTagMirrorSetsFromInputFile("")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(itms).To(BeNil())
+		})
+	})
+
+	Context("BuildImageDigestMirrorSourcesFromInputFile", func() {
+		It("OK: should work with proper json format", func() {
+			idmsPath := "specImageDigestMirrorSources.json"
+			idms, err := BuildImageDigestMirrorSourcesFromInputFile(idmsPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(idms["imageDigestMirrorSources"]).ToNot(BeNil())
+		})
+		It("KO: fail if the spec file is invalid", func() {
+			_, err := BuildImageDigestMirrorSourcesFromInputFile("not-exist")
+			Expect(err).To(MatchError(
+				"expected a valid ImageDigestMirrorSources spec file: open not-exist: no such file or directory"))
+		})
+		It("OK: return nil if empty path", func() {
+			idms, err := BuildImageDigestMirrorSourcesFromInputFile("")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(idms).To(BeNil())
+		})
+	})
+
 	Context("BuildRegistryConfigOptions", func() {
 		spec := ocm.Spec{}
 
@@ -68,13 +106,17 @@ var _ = Describe("Cluster Registry Config tests", func() {
 			spec.AdditionalTrustedCaFile = "ca.json"
 			spec.PlatformAllowlist = "allowlist-id"
 			spec.AllowedRegistriesForImport = "lala.com:true,*.io:false"
+			spec.ImageTagMirrorSets = "itms.json"
+			spec.ImageDigestMirrorSources = "idms.json"
 			output := BuildRegistryConfigOptions(spec)
 			expectedOutput := " --registry-config-allowed-registries abc.com,efg.com" +
 				" --registry-config-blocked-registries blocked.com" +
 				" --registry-config-insecure-registries 'insecure.com,*.insecure.com'" +
 				" --registry-config-additional-trusted-ca ca.json" +
 				" --registry-config-platform-allowlist allowlist-id" +
-				" --registry-config-allowed-registries-for-import 'lala.com:true,*.io:false'"
+				" --registry-config-allowed-registries-for-import 'lala.com:true,*.io:false'" +
+				" --registry-config-image-tag-mirror-sets itms.json" +
+				" --registry-config-image-digest-mirror-sources idms.json"
 			Expect(output).To(Equal(expectedOutput))
 		})
 	})
@@ -161,6 +203,18 @@ var _ = Describe("Cluster Registry Config tests", func() {
 			"A json file containing the registry hostname as the key,"+
 				" and the PEM-encoded certificate as the value, for each additional registry CA to trust.")
 
+		cmd.Flags().StringVar(
+			&args.imageTagMirrorSets,
+			imageTagMirrorSetsFlag,
+			"",
+			"A json file containing ImageTagMirrorSets configuration for mirroring images by tag.")
+
+		cmd.Flags().StringVar(
+			&args.imageDigestMirrorSources,
+			imageDigestMirrorSourcesFlag,
+			"",
+			"A json file containing ImageDigestMirrorSources configuration for mirroring images by digest.")
+
 		It("KO: return false if nothing is set", func() {
 			isClusterRegistryConfigSetViaCLI := IsClusterRegistryConfigSetViaCLI(flags)
 			Expect(isClusterRegistryConfigSetViaCLI).To(Equal(false))
@@ -192,6 +246,16 @@ var _ = Describe("Cluster Registry Config tests", func() {
 		})
 		It("OK: return true if sets additional trusted ca", func() {
 			flags.Set(additionalTrustedCaPathFlag, "ca.json")
+			isClusterRegistryConfigSetViaCLI := IsClusterRegistryConfigSetViaCLI(flags)
+			Expect(isClusterRegistryConfigSetViaCLI).To(Equal(true))
+		})
+		It("OK: return true if sets image tag mirror sets", func() {
+			flags.Set(imageTagMirrorSetsFlag, "itms.json")
+			isClusterRegistryConfigSetViaCLI := IsClusterRegistryConfigSetViaCLI(flags)
+			Expect(isClusterRegistryConfigSetViaCLI).To(Equal(true))
+		})
+		It("OK: return true if sets image digest mirror sources", func() {
+			flags.Set(imageDigestMirrorSourcesFlag, "idms.json")
 			isClusterRegistryConfigSetViaCLI := IsClusterRegistryConfigSetViaCLI(flags)
 			Expect(isClusterRegistryConfigSetViaCLI).To(Equal(true))
 		})

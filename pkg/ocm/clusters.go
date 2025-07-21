@@ -184,13 +184,17 @@ type Spec struct {
 	AdditionalControlPlaneSecurityGroupIds []string
 
 	// Registry Config
-	AllowedRegistries          []string
-	BlockedRegistries          []string
-	InsecureRegistries         []string
-	AllowedRegistriesForImport string
-	PlatformAllowlist          string
-	AdditionalTrustedCaFile    string
-	AdditionalTrustedCa        map[string]string
+	AllowedRegistries            []string
+	BlockedRegistries            []string
+	InsecureRegistries           []string
+	AllowedRegistriesForImport   string
+	PlatformAllowlist            string
+	AdditionalTrustedCaFile      string
+	AdditionalTrustedCa          map[string]string
+	ImageTagMirrorSets           string
+	ImageDigestMirrorSources     string
+	ImageTagMirrorSetsData       map[string]interface{}
+	ImageDigestMirrorSourcesData map[string]interface{}
 }
 
 // Volume represents a volume property for a disk

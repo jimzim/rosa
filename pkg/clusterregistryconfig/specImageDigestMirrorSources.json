@@ -1,0 +1,19 @@
+{
+  "imageDigestMirrorSources": [
+    {
+      "name": "digest-mirror-1",
+      "source": "registry.redhat.io",
+      "mirrors": [
+        "mirror.example.com:5000/redhat",
+        "mirror2.example.com/redhat"
+      ]
+    },
+    {
+      "name": "digest-mirror-2",
+      "source": "docker.io",
+      "mirrors": [
+        "mirror.example.com:5000/docker"
+      ]
+    }
+  ]
+} 

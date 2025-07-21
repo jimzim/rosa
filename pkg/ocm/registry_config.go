@@ -30,7 +30,8 @@ func BuildRegistryConfig(spec Spec) (*cmv1.ClusterRegistryConfigBuilder, error) 
 	isClusterRegistryConfigured := spec.AllowedRegistries != nil ||
 		spec.BlockedRegistries != nil || spec.InsecureRegistries != nil ||
 		spec.AllowedRegistriesForImport != "" || spec.PlatformAllowlist != "" ||
-		spec.AdditionalTrustedCa != nil
+		spec.AdditionalTrustedCa != nil || spec.ImageTagMirrorSets != "" ||
+		spec.ImageDigestMirrorSources != ""
 
 	if isClusterRegistryConfigured {
 		registryResources := cmv1.NewRegistrySources()
