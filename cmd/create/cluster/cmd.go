@@ -275,7 +275,20 @@ func makeCmd() *cobra.Command {
   rosa create cluster --cluster-name=mycluster
 
   # Create a cluster in the us-east-2 region
-  rosa create cluster --cluster-name=mycluster --region=us-east-2`,
+  rosa create cluster --cluster-name=mycluster --region=us-east-2
+  
+  # Create a cluster with Image Digest Mirror Sets
+  rosa create cluster --cluster-name=mycluster \
+    --registry-config-image-digest-mirror-sets="company-mirrors:registry.company.com/openshift=mirror1.company.com/openshift,mirror2.company.com/openshift"
+  
+  # Create a cluster with Image Tag Mirror Sets
+  rosa create cluster --cluster-name=mycluster \
+    --registry-config-image-tag-mirror-sets="tag-mirrors:docker.io/library=mirror.company.com/docker-library"
+  
+  # Create a cluster with both IDMS and ITMS
+  rosa create cluster --cluster-name=mycluster \
+    --registry-config-image-digest-mirror-sets="digest-mirrors:registry.redhat.io/openshift4=internal.company.com/openshift4" \
+    --registry-config-image-tag-mirror-sets="tag-mirrors:docker.io=internal.company.com/docker-proxy"`,
 		Run:  run,
 		Args: cobra.NoArgs,
 	}
@@ -509,7 +522,7 @@ func initFlags(cmd *cobra.Command) {
 	flags.BoolVar(&args.enableCustomerManagedKey,
 		"enable-customer-managed-key",
 		false,
-		"Enable to specify your KMS Key to encrypt EBS instance volumes. By default account’s default "+
+		"Enable to specify your KMS Key to encrypt EBS instance volumes. By default account's default "+
 			"KMS key for that particular region is used.")
 
 	flags.StringVar(&args.kmsKeyARN,
@@ -3437,10 +3450,32 @@ func run(cmd *cobra.Command, _ []string) {
 			additionalTrustedCa, allowedRegistriesForImport,
 			platformAllowlist := clusterregistryconfig.GetClusterRegistryConfigArgs(
 			clusterRegistryConfigArgs)
+
+		// NEW: Process IDMS/ITMS
+		imageDigestMirrorSets, imageTagMirrorSets, err :=
+			clusterregistryconfig.GetImageMirrorSetArgs(clusterRegistryConfigArgs)
+		if err != nil {
+			r.Reporter.Errorf("Failed to parse image mirror sets: %s", err)
+			os.Exit(1)
+		}
+
 		clusterConfig.AllowedRegistries = allowedRegistries
 		clusterConfig.BlockedRegistries = blockedRegistries
 		clusterConfig.InsecureRegistries = insecureRegistries
 		clusterConfig.PlatformAllowlist = platformAllowlist
+
+		// NEW: Set IDMS/ITMS
+		clusterConfig.ImageDigestMirrorSets = imageDigestMirrorSets
+		clusterConfig.ImageTagMirrorSets = imageTagMirrorSets
+
+		// NEW: Validate IDMS/ITMS configuration
+		if len(imageDigestMirrorSets) > 0 || len(imageTagMirrorSets) > 0 {
+			if err := clusterregistryconfig.ValidateCompleteImageMirrorSetConfiguration(
+				imageDigestMirrorSets, imageTagMirrorSets, version); err != nil {
+				r.Reporter.Errorf("Image mirror set validation failed: %s", err)
+				os.Exit(1)
+			}
+		}
 
 		if additionalTrustedCa != "" {
 			ca, err := clusterregistryconfig.BuildAdditionalTrustedCAFromInputFile(additionalTrustedCa)
@@ -4184,6 +4219,9 @@ func buildCommand(spec ocm.Spec, operatorRolesPrefix string,
 
 	command += clusterautoscaler.BuildAutoscalerOptions(spec.AutoscalerConfig, clusterAutoscalerFlagsPrefix)
 	command += clusterregistryconfig.BuildRegistryConfigOptions(spec)
+
+	// NEW: Add IDMS/ITMS options
+	command += clusterregistryconfig.BuildImageMirrorSetOptions(spec)
 
 	if len(spec.AdditionalComputeSecurityGroupIds) > 0 {
 		command += fmt.Sprintf(" --%s %s",

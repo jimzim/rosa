@@ -1000,6 +1000,33 @@ func getClusterRegistryConfig(cluster *cmv1.Cluster, allowlist *cmv1.RegistryAll
 				registry)
 		}
 	}
+
+	// Display IDMS (ImageDigestMirrorSet) configuration
+	if cluster.RegistryConfig().ImageDigestMirrorSets() != nil && len(cluster.RegistryConfig().ImageDigestMirrorSets()) > 0 {
+		output = fmt.Sprintf("%s - Image Digest Mirror Sets:\n", output)
+		for _, idms := range cluster.RegistryConfig().ImageDigestMirrorSets() {
+			output = fmt.Sprintf("%s    - Name:                 %s\n", output, idms.Name())
+			for _, mirror := range idms.Mirrors() {
+				output = fmt.Sprintf("%s      Source:               %s\n", output, mirror.Source())
+				output = fmt.Sprintf("%s      Mirrors (by digest):  %s\n", output,
+					strings.Join(mirror.MirrorsByDigest(), ", "))
+			}
+		}
+	}
+
+	// Display ITMS (ImageTagMirrorSet) configuration
+	if cluster.RegistryConfig().ImageTagMirrorSets() != nil && len(cluster.RegistryConfig().ImageTagMirrorSets()) > 0 {
+		output = fmt.Sprintf("%s - Image Tag Mirror Sets:\n", output)
+		for _, itms := range cluster.RegistryConfig().ImageTagMirrorSets() {
+			output = fmt.Sprintf("%s    - Name:                 %s\n", output, itms.Name())
+			for _, mirror := range itms.Mirrors() {
+				output = fmt.Sprintf("%s      Source:               %s\n", output, mirror.Source())
+				output = fmt.Sprintf("%s      Mirrors (by tag):     %s\n", output,
+					strings.Join(mirror.MirrorsByTag(), ", "))
+			}
+		}
+	}
+
 	return output
 }
 

@@ -23,6 +23,10 @@ const (
 	platformAllowlistFlag          = "registry-config-platform-allowlist"
 	additionalTrustedCaPathFlag    = "registry-config-additional-trusted-ca"
 	allowedRegistriesForImportFlag = "registry-config-allowed-registries-for-import"
+
+	// NEW: IDMS/ITMS flags
+	imageDigestMirrorSetsFlag = "registry-config-image-digest-mirror-sets"
+	imageTagMirrorSetsFlag    = "registry-config-image-tag-mirror-sets"
 )
 
 type ClusterRegistryConfigArgs struct {
@@ -32,6 +36,10 @@ type ClusterRegistryConfigArgs struct {
 	allowedRegistriesForImport string
 	platformAllowlist          string
 	additionalTrustedCa        string
+
+	// NEW: IDMS/ITMS fields
+	imageDigestMirrorSets []string
+	imageTagMirrorSets    []string
 }
 
 func AddClusterRegistryConfigFlags(cmd *cobra.Command) *ClusterRegistryConfigArgs {
@@ -84,7 +92,121 @@ func AddClusterRegistryConfigFlags(cmd *cobra.Command) *ClusterRegistryConfigArg
 		"A json file containing the registry hostname as the key,"+
 			" and the PEM-encoded certificate as the value, for each additional registry CA to trust.")
 
+	// NEW: IDMS/ITMS flags
+	cmd.Flags().StringSliceVar(
+		&args.imageDigestMirrorSets,
+		imageDigestMirrorSetsFlag,
+		nil,
+		"ImageDigestMirrorSet configurations for digest-based image mirroring. "+
+			"Format: 'name:source=mirror1,mirror2'. Multiple sets can be specified. "+
+			"Example: 'company-mirrors:registry.company.com/openshift=mirror1.company.com/openshift,mirror2.company.com/openshift'",
+	)
+
+	cmd.Flags().StringSliceVar(
+		&args.imageTagMirrorSets,
+		imageTagMirrorSetsFlag,
+		nil,
+		"ImageTagMirrorSet configurations for tag-based image mirroring. "+
+			"Format: 'name:source=mirror1,mirror2'. Multiple sets can be specified. "+
+			"Example: 'tag-mirrors:docker.io/library=mirror.company.com/docker-library'",
+	)
+
 	return args
+}
+
+// parseImageDigestMirrorSets parses IDMS string format into structured data
+func parseImageDigestMirrorSets(input []string) ([]ocm.ImageDigestMirrorSet, error) {
+	var result []ocm.ImageDigestMirrorSet
+
+	for _, entry := range input {
+		if entry == "" {
+			continue
+		}
+
+		// Use the validation function to ensure format compliance
+		if err := validateSingleMirrorSetFormat(entry); err != nil {
+			return nil, err
+		}
+
+		// Parse format: "name:source=mirror1,mirror2"
+		parts := strings.SplitN(entry, ":", 2)
+		name := parts[0]
+		sourceMirrors := strings.SplitN(parts[1], "=", 2)
+		source := sourceMirrors[0]
+		mirrors := strings.Split(sourceMirrors[1], ",")
+
+		// Trim mirrors
+		for i, mirror := range mirrors {
+			mirrors[i] = strings.TrimSpace(mirror)
+		}
+
+		result = append(result, ocm.ImageDigestMirrorSet{
+			Name: name,
+			Mirrors: []ocm.ImageMirror{
+				{
+					Source:          source,
+					MirrorsByDigest: mirrors,
+				},
+			},
+		})
+	}
+
+	return result, nil
+}
+
+// parseImageTagMirrorSets parses ITMS string format into structured data
+func parseImageTagMirrorSets(input []string) ([]ocm.ImageTagMirrorSet, error) {
+	var result []ocm.ImageTagMirrorSet
+
+	for _, entry := range input {
+		if entry == "" {
+			continue
+		}
+
+		// Use the validation function to ensure format compliance
+		if err := validateSingleMirrorSetFormat(entry); err != nil {
+			return nil, err
+		}
+
+		// Parse format: "name:source=mirror1,mirror2"
+		parts := strings.SplitN(entry, ":", 2)
+		name := parts[0]
+		sourceMirrors := strings.SplitN(parts[1], "=", 2)
+		source := sourceMirrors[0]
+		mirrors := strings.Split(sourceMirrors[1], ",")
+
+		// Trim mirrors
+		for i, mirror := range mirrors {
+			mirrors[i] = strings.TrimSpace(mirror)
+		}
+
+		result = append(result, ocm.ImageTagMirrorSet{
+			Name: name,
+			Mirrors: []ocm.ImageMirror{
+				{
+					Source:       source,
+					MirrorsByTag: mirrors,
+				},
+			},
+		})
+	}
+
+	return result, nil
+}
+
+// GetImageMirrorSetArgs parses and returns IDMS/ITMS configurations
+func GetImageMirrorSetArgs(args *ClusterRegistryConfigArgs) ([]ocm.ImageDigestMirrorSet, []ocm.ImageTagMirrorSet, error) {
+	idmsList, err := parseImageDigestMirrorSets(args.imageDigestMirrorSets)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse IDMS: %v", err)
+	}
+
+	itmsList, err := parseImageTagMirrorSets(args.imageTagMirrorSets)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse ITMS: %v", err)
+	}
+
+	return idmsList, itmsList, nil
 }
 
 func GetClusterRegistryConfigArgs(args *ClusterRegistryConfigArgs) (
@@ -255,10 +377,16 @@ func GetClusterRegistryConfigQuestion(cluster *cmv1.Cluster) string {
 }
 
 func IsClusterRegistryConfigSetViaCLI(cmd *pflag.FlagSet) bool {
-	for _, parameter := range []string{allowedRegistriesFlag,
-		insecureRegistriesFlag, blockedRegistriesFlag, platformAllowlistFlag,
-		allowedRegistriesForImportFlag, additionalTrustedCaPathFlag} {
-
+	for _, parameter := range []string{
+		allowedRegistriesFlag,
+		insecureRegistriesFlag,
+		blockedRegistriesFlag,
+		platformAllowlistFlag,
+		allowedRegistriesForImportFlag,
+		additionalTrustedCaPathFlag,
+		imageDigestMirrorSetsFlag,
+		imageTagMirrorSetsFlag,
+	} {
 		if cmd.Changed(parameter) {
 			return true
 		}
@@ -304,6 +432,51 @@ func BuildRegistryConfigOptions(spec ocm.Spec) string {
 		command += fmt.Sprintf(" --%s %s",
 			allowedRegistriesForImportFlag,
 			shellescape.Quote(spec.AllowedRegistriesForImport))
+	}
+
+	return command
+}
+
+// BuildImageMirrorSetOptions builds command line options for IDMS/ITMS
+func BuildImageMirrorSetOptions(spec ocm.Spec) string {
+	command := ""
+
+	// Build IDMS options
+	if len(spec.ImageDigestMirrorSets) > 0 {
+		var idmsStrings []string
+		for _, idms := range spec.ImageDigestMirrorSets {
+			for _, mirror := range idms.Mirrors {
+				idmsString := fmt.Sprintf("%s:%s=%s",
+					idms.Name,
+					mirror.Source,
+					strings.Join(mirror.MirrorsByDigest, ","))
+				idmsStrings = append(idmsStrings, idmsString)
+			}
+		}
+		if len(idmsStrings) > 0 {
+			command += fmt.Sprintf(" --%s %s",
+				imageDigestMirrorSetsFlag,
+				shellescape.Quote(strings.Join(idmsStrings, " ")))
+		}
+	}
+
+	// Build ITMS options
+	if len(spec.ImageTagMirrorSets) > 0 {
+		var itmsStrings []string
+		for _, itms := range spec.ImageTagMirrorSets {
+			for _, mirror := range itms.Mirrors {
+				itmsString := fmt.Sprintf("%s:%s=%s",
+					itms.Name,
+					mirror.Source,
+					strings.Join(mirror.MirrorsByTag, ","))
+				itmsStrings = append(itmsStrings, itmsString)
+			}
+		}
+		if len(itmsStrings) > 0 {
+			command += fmt.Sprintf(" --%s %s",
+				imageTagMirrorSetsFlag,
+				shellescape.Quote(strings.Join(itmsStrings, " ")))
+		}
 	}
 
 	return command

@@ -30,7 +30,8 @@ func BuildRegistryConfig(spec Spec) (*cmv1.ClusterRegistryConfigBuilder, error) 
 	isClusterRegistryConfigured := spec.AllowedRegistries != nil ||
 		spec.BlockedRegistries != nil || spec.InsecureRegistries != nil ||
 		spec.AllowedRegistriesForImport != "" || spec.PlatformAllowlist != "" ||
-		spec.AdditionalTrustedCa != nil
+		spec.AdditionalTrustedCa != nil ||
+		len(spec.ImageDigestMirrorSets) > 0 || len(spec.ImageTagMirrorSets) > 0
 
 	if isClusterRegistryConfigured {
 		registryResources := cmv1.NewRegistrySources()
@@ -69,6 +70,47 @@ func BuildRegistryConfig(spec Spec) (*cmv1.ClusterRegistryConfigBuilder, error) 
 			}
 			clusterRegistryConfig.AllowedRegistriesForImport(locationList...)
 		}
+
+		// Add IDMS (ImageDigestMirrorSet) support
+		if len(spec.ImageDigestMirrorSets) > 0 {
+			for _, idms := range spec.ImageDigestMirrorSets {
+				idmsBuilder := cmv1.NewImageDigestMirrorSet().Name(idms.Name)
+
+				for _, mirror := range idms.Mirrors {
+					mirrorBuilder := cmv1.NewImageMirror().
+						Source(mirror.Source)
+
+					if len(mirror.MirrorsByDigest) > 0 {
+						mirrorBuilder = mirrorBuilder.MirrorsByDigest(mirror.MirrorsByDigest...)
+					}
+
+					idmsBuilder = idmsBuilder.Mirrors(mirrorBuilder)
+				}
+
+				clusterRegistryConfig = clusterRegistryConfig.ImageDigestMirrorSets(idmsBuilder)
+			}
+		}
+
+		// Add ITMS (ImageTagMirrorSet) support
+		if len(spec.ImageTagMirrorSets) > 0 {
+			for _, itms := range spec.ImageTagMirrorSets {
+				itmsBuilder := cmv1.NewImageTagMirrorSet().Name(itms.Name)
+
+				for _, mirror := range itms.Mirrors {
+					mirrorBuilder := cmv1.NewImageMirror().
+						Source(mirror.Source)
+
+					if len(mirror.MirrorsByTag) > 0 {
+						mirrorBuilder = mirrorBuilder.MirrorsByTag(mirror.MirrorsByTag...)
+					}
+
+					itmsBuilder = itmsBuilder.Mirrors(mirrorBuilder)
+				}
+
+				clusterRegistryConfig = clusterRegistryConfig.ImageTagMirrorSets(itmsBuilder)
+			}
+		}
+
 		return clusterRegistryConfig, nil
 	}
 	return nil, nil

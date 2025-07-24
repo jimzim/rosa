@@ -111,3 +111,5 @@
 - name: registry-config-allowed-registries-for-import
 - name: registry-config-platform-allowlist
 - name: registry-config-additional-trusted-ca
+- name: registry-config-image-digest-mirror-sets
+- name: registry-config-image-tag-mirror-sets

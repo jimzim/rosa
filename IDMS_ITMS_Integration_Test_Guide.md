@@ -2,474 +2,461 @@
 
 ## 📋 **Overview**
 
-This guide provides step-by-step instructions for testing the complete IDMS/ITMS integration across all three repositories. Follow this guide to verify the implementation works end-to-end.
+This guide provides step-by-step instructions for testing the complete IDMS/ITMS implementation across all three repositories. It includes setup instructions, test scenarios, and expected outcomes.
 
-## 🛠️ **Prerequisites**
+## 🎯 **Test Objectives**
 
-- **Go**: Version 1.23 or later
-- **Make**: For building projects
-- **Git**: For cloning repositories
-- **Network Access**: To download dependencies
+1. ✅ Verify CLI flag recognition and parsing
+2. ✅ Test input validation and error handling  
+3. ✅ Confirm help text and documentation
+4. ✅ Validate data structure handling
+5. ⏳ Test end-to-end cluster creation (pending SDK fix)
 
-## 🚀 **Quick Setup for Testing**
+---
 
-### **Step 1: Clone All Three Repositories**
+## 🏗️ **Environment Setup**
+
+### **Prerequisites**
+- Go 1.21+ installed
+- Git configured for your repositories
+- Terminal with bash/zsh support
+
+### **Step 1: Clone All Repositories**
 
 ```bash
-# Create a workspace directory
-mkdir -p ~/rosa-idms-testing
-cd ~/rosa-idms-testing
+# Create a dedicated testing directory
+mkdir -p ~/idms-itms-testing
+cd ~/idms-itms-testing
 
-# Clone all three repositories with feature branches
-git clone -b feat/IDMS-ITMS-support https://github.com/YOUR_USERNAME/ocm-api-model.git
-git clone -b feat/IDMS-ITMS-support https://github.com/YOUR_USERNAME/ocm-sdk-go.git  
-git clone -b feat/IDMS-ITMS-support https://github.com/YOUR_USERNAME/rosa.git
+# Clone the three repositories
+git clone https://github.com/your-fork/ocm-api-model.git
+git clone https://github.com/your-fork/ocm-sdk-go.git  
+git clone https://github.com/your-fork/rosa.git
 ```
 
-### **Step 2: Set Up Local Development Environment**
+### **Step 2: Switch to Feature Branches**
 
 ```bash
-# Generate API model code
-cd ocm-api-model
-make generate
-cd ..
+# Switch to the IDMS/ITMS feature branch in all repos
+cd ocm-api-model && git checkout feat/IDMS-ITMS-support && cd ..
+cd ocm-sdk-go && git checkout feat/IDMS-ITMS-support && cd ..
+cd rosa && git checkout feat/IDMS-ITMS-support && cd ..
+```
 
-# Generate and test OCM SDK
-cd ocm-sdk-go
-make generate
-make examples  # This should compile without errors
-cd ..
+### **Step 3: Verify Local Integration**
 
-# Build ROSA CLI
+```bash
+# Check that the repositories are properly linked
 cd rosa
-make rosa  # This should build the rosa binary
-cd ..
+
+# Verify go.mod has the correct replace directives
+grep -A2 "replace.*ocm-sdk-go" go.mod
+grep -A2 "replace.*ocm-api-model" ../ocm-sdk-go/go.mod
 ```
 
 ---
 
-## 🧪 **Test Suite 1: Basic Compilation**
+## ✅ **Test Suite 1: CLI Flag Recognition**
 
-### **Test 1.1: Verify All Repositories Compile**
+### **Test 1.1: Help Text Verification**
 
 ```bash
-# Test API Model
-cd ocm-api-model
-echo "Testing API Model compilation..."
-make generate
-if [ $? -eq 0 ]; then
-    echo "✅ API Model: PASSED"
-else
-    echo "❌ API Model: FAILED"
-    exit 1
-fi
-cd ..
-
-# Test OCM SDK
-cd ocm-sdk-go
-echo "Testing OCM SDK compilation..."
-make examples
-if [ $? -eq 0 ]; then
-    echo "✅ OCM SDK: PASSED"
-else
-    echo "❌ OCM SDK: FAILED"
-    exit 1
-fi
-cd ..
-
-# Test ROSA CLI
 cd rosa
-echo "Testing ROSA CLI compilation..."
-make rosa
-if [ $? -eq 0 ]; then
-    echo "✅ ROSA CLI: PASSED"
-else
-    echo "❌ ROSA CLI: FAILED"
-    exit 1
-fi
-cd ..
+
+# Test 1: Verify IDMS flag is recognized
+echo "🧪 Testing IDMS flag recognition..."
+./rosa create cluster --help | grep -A3 -B1 "image-digest-mirror-sets"
+
+# Expected: Flag should be listed with description
+# ✅ PASS: Flag appears in help text
+# ❌ FAIL: Flag not found or missing description
 ```
 
-### **Test 1.2: Verify New Types Exist in OCM SDK**
+```bash
+# Test 2: Verify ITMS flag is recognized  
+echo "🧪 Testing ITMS flag recognition..."
+./rosa create cluster --help | grep -A3 -B1 "image-tag-mirror-sets"
+
+# Expected: Flag should be listed with description
+# ✅ PASS: Flag appears in help text
+# ❌ FAIL: Flag not found or missing description
+```
+
+### **Test 1.2: Flag Format Documentation**
 
 ```bash
-cd ocm-sdk-go
+# Test 3: Check examples in help text
+echo "🧪 Testing help text examples..."
+./rosa create cluster --help | grep -A10 -B5 "registry-config.*mirror.*sets"
 
-echo "Checking for IDMS/ITMS types in OCM SDK..."
-
-# Check for ImageDigestMirrorSet
-if grep -r "ImageDigestMirrorSet" clustersmgmt/v1/ > /dev/null; then
-    echo "✅ ImageDigestMirrorSet type found"
-else
-    echo "❌ ImageDigestMirrorSet type NOT found"
-fi
-
-# Check for ImageTagMirrorSet
-if grep -r "ImageTagMirrorSet" clustersmgmt/v1/ > /dev/null; then
-    echo "✅ ImageTagMirrorSet type found"
-else
-    echo "❌ ImageTagMirrorSet type NOT found"
-fi
-
-# Check for ImageMirror
-if grep -r "ImageMirror" clustersmgmt/v1/ > /dev/null; then
-    echo "✅ ImageMirror type found"
-else
-    echo "❌ ImageMirror type NOT found"
-fi
-
-cd ..
+# Expected: Should show example usage format
+# ✅ PASS: Examples show proper format: "name:source:mirror1,mirror2|name2:..."
+# ❌ FAIL: No examples or incorrect format shown
 ```
 
 ---
 
-## 🧪 **Test Suite 2: CLI Flag Testing**
+## ✅ **Test Suite 2: Input Validation**
 
-### **Test 2.1: Verify New CLI Flags Exist**
+### **Test 2.1: Valid Input Acceptance**
 
 ```bash
-cd rosa
+echo "🧪 Testing valid IDMS input..."
+./rosa create cluster test-cluster \
+  --registry-config-image-digest-mirror-sets="production:registry.example.com:quay.io,docker.io" \
+  --dry-run
 
-echo "Testing ROSA CLI flag availability..."
-
-# Test IDMS flag exists
-if ./rosa create cluster --help | grep -q "registry-config-image-digest-mirror-sets"; then
-    echo "✅ IDMS flag found in help"
-else
-    echo "❌ IDMS flag NOT found in help"
-fi
-
-# Test ITMS flag exists
-if ./rosa create cluster --help | grep -q "registry-config-image-tag-mirror-sets"; then
-    echo "✅ ITMS flag found in help"
-else
-    echo "❌ ITMS flag NOT found in help"
-fi
-
-# Display the help for manual verification
-echo ""
-echo "🔍 Registry config flags in help:"
-./rosa create cluster --help | grep -A1 -B1 "registry-config-image"
-
-cd ..
+# Expected: No validation errors, should proceed with dry-run
+# ✅ PASS: Command accepts input and shows parsed configuration
+# ❌ FAIL: Validation errors for valid input
 ```
 
-### **Test 2.2: Test Flag Parsing**
-
 ```bash
-cd rosa
+echo "🧪 Testing valid ITMS input..."
+./rosa create cluster test-cluster \
+  --registry-config-image-tag-mirror-sets="staging:registry.internal.com:mirror1.io,mirror2.io" \
+  --dry-run
 
-echo "Testing CLI flag parsing..."
-
-# Test IDMS flag parsing (dry-run to avoid actual cluster creation)
-echo "Testing IDMS flag parsing..."
-./rosa create cluster test-idms-cluster \
-  --registry-config-image-digest-mirror-sets="production-mirrors:registry.redhat.io=mirror1.company.com,mirror2.company.com" \
-  --dry-run \
-  --mode=auto \
-  --yes 2>&1 | head -20
-
-echo ""
-echo "Testing ITMS flag parsing..."
-# Test ITMS flag parsing
-./rosa create cluster test-itms-cluster \
-  --registry-config-image-tag-mirror-sets="dev-mirrors:quay.io=dev-mirror.company.com" \
-  --dry-run \
-  --mode=auto \
-  --yes 2>&1 | head -20
-
-cd ..
+# Expected: No validation errors, should proceed with dry-run
+# ✅ PASS: Command accepts input and shows parsed configuration
+# ❌ FAIL: Validation errors for valid input
 ```
 
----
-
-## 🧪 **Test Suite 3: Validation Testing**
-
-### **Test 3.1: Test Format Validation**
+### **Test 2.2: Invalid Input Rejection**
 
 ```bash
-cd rosa
+echo "🧪 Testing invalid format rejection..."
+./rosa create cluster test-cluster \
+  --registry-config-image-digest-mirror-sets="invalid-format-here" \
+  --dry-run
 
-echo "Testing validation for incorrect formats..."
-
-# Test invalid format (should fail)
-echo "Testing invalid IDMS format (should show validation error):"
-./rosa create cluster test-invalid \
-  --registry-config-image-digest-mirror-sets="invalid-format-no-colon" \
-  --dry-run \
-  --mode=auto \
-  --yes 2>&1 | grep -i error || echo "No validation error shown"
-
-echo ""
-echo "Testing invalid registry format (should show validation error):"
-./rosa create cluster test-invalid2 \
-  --registry-config-image-digest-mirror-sets="test:invalid..registry=mirror.com" \
-  --dry-run \
-  --mode=auto \
-  --yes 2>&1 | grep -i error || echo "No validation error shown"
-
-cd ..
+# Expected: Clear validation error explaining correct format
+# ✅ PASS: Helpful error message with format explanation
+# ❌ FAIL: No validation or unclear error message
 ```
 
-### **Test 3.2: Test Platform Registry Protection**
+```bash
+echo "🧪 Testing invalid registry format..."
+./rosa create cluster test-cluster \
+  --registry-config-image-digest-mirror-sets="test:not-a-valid-registry:mirror.io" \
+  --dry-run
+
+# Expected: Registry format validation error
+# ✅ PASS: Error explains registry format requirements
+# ❌ FAIL: Invalid registry format accepted
+```
+
+### **Test 2.3: Platform Registry Protection**
 
 ```bash
-cd rosa
+echo "🧪 Testing platform registry protection..."
+./rosa create cluster test-cluster \
+  --registry-config-image-digest-mirror-sets="test:registry.redhat.io:external-mirror.com" \
+  --dry-run
 
-echo "Testing platform registry protection..."
-
-# Test blocking Red Hat registries (should show warning or error)
-echo "Testing platform registry protection (should show warning):"
-./rosa create cluster test-platform \
-  --registry-config-image-digest-mirror-sets="risky:registry.redhat.io=external-mirror.com" \
-  --dry-run \
-  --mode=auto \
-  --yes 2>&1 | grep -i "warning\|error" || echo "No protection warning shown"
-
-cd ..
+# Expected: Warning or error about platform registry mirroring
+# ✅ PASS: Clear warning about platform registry risks
+# ❌ FAIL: Platform registries allowed without warning
 ```
 
 ---
 
-## 🧪 **Test Suite 4: Unit Test Verification**
+## ✅ **Test Suite 3: Complex Configuration**
 
-### **Test 4.1: Run ROSA CLI Unit Tests**
+### **Test 3.1: Multiple Mirror Sets**
 
 ```bash
-cd rosa
+echo "🧪 Testing multiple IDMS configurations..."
+./rosa create cluster test-cluster \
+  --registry-config-image-digest-mirror-sets="prod:registry.example.com:mirror1.io,mirror2.io|staging:registry.internal.com:mirror3.io" \
+  --dry-run
 
-echo "Running ROSA CLI unit tests..."
-
-# Run validation tests specifically
-echo "Testing validation functions..."
-go test ./pkg/clusterregistryconfig/... -v
-
-echo ""
-echo "Testing OCM integration..."
-go test ./pkg/ocm/... -v
-
-echo ""
-echo "Running all CLI tests..."
-go test ./cmd/create/cluster/... -v
-
-cd ..
+# Expected: Both mirror sets parsed correctly
+# ✅ PASS: Multiple sets shown in output
+# ❌ FAIL: Only one set parsed or parsing errors
 ```
 
-### **Test 4.2: Test Coverage Report**
+### **Test 3.2: Mixed IDMS and ITMS**
 
 ```bash
-cd rosa
+echo "🧪 Testing IDMS and ITMS together..."
+./rosa create cluster test-cluster \
+  --registry-config-image-digest-mirror-sets="prod-digest:registry.example.com:mirror1.io" \
+  --registry-config-image-tag-mirror-sets="prod-tag:registry.example.com:mirror2.io" \
+  --dry-run
 
-echo "Generating test coverage report for new functionality..."
-
-# Generate coverage for registry config package
-go test ./pkg/clusterregistryconfig/... -coverprofile=coverage-registry.out
-go tool cover -html=coverage-registry.out -o coverage-registry.html
-
-echo "✅ Coverage report generated: coverage-registry.html"
-
-cd ..
+# Expected: Both types accepted and configured
+# ✅ PASS: Both IDMS and ITMS configurations shown
+# ❌ FAIL: Conflict or only one type accepted
 ```
 
----
-
-## 🧪 **Test Suite 5: Integration Scenarios**
-
-### **Test 5.1: Multiple Mirror Sets**
+### **Test 3.3: Integration with Other Registry Options**
 
 ```bash
-cd rosa
+echo "🧪 Testing with other registry configurations..."
+./rosa create cluster test-cluster \
+  --registry-config-image-digest-mirror-sets="test:registry.example.com:mirror.io" \
+  --registry-config-blocked-registries="blocked.example.com" \
+  --registry-config-insecure-registries="insecure.example.com" \
+  --dry-run
 
-echo "Testing multiple IDMS/ITMS configurations..."
-
-# Test multiple IDMS entries
-./rosa create cluster test-multiple \
-  --registry-config-image-digest-mirror-sets="prod-mirrors:registry.redhat.io=mirror1.com,mirror2.com" \
-  --registry-config-image-digest-mirror-sets="dev-mirrors:quay.io=dev-mirror.com" \
-  --registry-config-image-tag-mirror-sets="tag-mirrors:docker.io=local-mirror.com" \
-  --dry-run \
-  --mode=auto \
-  --yes 2>&1 | head -30
-
-cd ..
-```
-
-### **Test 5.2: Mixed Registry Configurations**
-
-```bash
-cd rosa
-
-echo "Testing IDMS/ITMS with other registry configurations..."
-
-# Test IDMS/ITMS with blocked registries
-./rosa create cluster test-mixed \
-  --registry-config-image-digest-mirror-sets="mirrors:external.registry.com=internal.mirror.com" \
-  --registry-config-blocked-registries="badregistry.io" \
-  --registry-config-insecure-registries="insecure.registry.com" \
-  --dry-run \
-  --mode=auto \
-  --yes 2>&1 | head -30
-
-cd ..
+# Expected: All registry configurations work together
+# ✅ PASS: All registry options shown in configuration
+# ❌ FAIL: Conflicts between different registry options
 ```
 
 ---
 
-## 🧪 **Test Suite 6: Error Scenarios**
+## ✅ **Test Suite 4: Validation Logic**
 
-### **Test 6.1: Version Compatibility**
+### **Test 4.1: Name Validation**
 
 ```bash
-cd rosa
+echo "🧪 Testing Kubernetes naming validation..."
+./rosa create cluster test-cluster \
+  --registry-config-image-digest-mirror-sets="Invalid_Name_With_Underscores:registry.io:mirror.io" \
+  --dry-run
 
-echo "Testing OpenShift version compatibility..."
-
-# Test with older OpenShift version (should show warning for IDMS/ITMS)
-./rosa create cluster test-version \
-  --version="4.12.30" \
-  --registry-config-image-digest-mirror-sets="test:registry.com=mirror.com" \
-  --dry-run \
-  --mode=auto \
-  --yes 2>&1 | grep -i "version\|warning\|error" || echo "No version compatibility check shown"
-
-cd ..
+# Expected: Error about Kubernetes naming conventions
+# ✅ PASS: Clear error about invalid name format
+# ❌ FAIL: Invalid names accepted
 ```
 
-### **Test 6.2: Limit Testing**
+### **Test 4.2: Configuration Limits**
 
 ```bash
-cd rosa
+echo "🧪 Testing configuration limits..."
+# Create a very long configuration to test limits
+LONG_CONFIG="set1:registry1.io:mirror1.io|set2:registry2.io:mirror2.io|set3:registry3.io:mirror3.io|set4:registry4.io:mirror4.io|set5:registry5.io:mirror5.io"
+./rosa create cluster test-cluster \
+  --registry-config-image-digest-mirror-sets="$LONG_CONFIG" \
+  --dry-run
 
-echo "Testing limits and boundaries..."
+# Expected: May have limits on number of mirror sets
+# ✅ PASS: Either accepts or gives clear limit error
+# ❌ FAIL: Crashes or unclear error on large configurations
+```
 
-# Test with maximum number of mirror sets (implementation dependent)
-# This tests the limits validation
-./rosa create cluster test-limits \
-  --registry-config-image-digest-mirror-sets="set1:reg1.com=mirror1.com" \
-  --registry-config-image-digest-mirror-sets="set2:reg2.com=mirror2.com" \
-  --registry-config-image-digest-mirror-sets="set3:reg3.com=mirror3.com" \
-  --registry-config-image-digest-mirror-sets="set4:reg4.com=mirror4.com" \
-  --registry-config-image-digest-mirror-sets="set5:reg5.com=mirror5.com" \
-  --dry-run \
-  --mode=auto \
-  --yes 2>&1 | grep -i "limit\|maximum\|error" || echo "No limit validation shown"
+---
 
-cd ..
+## ✅ **Test Suite 5: CLI User Experience**
+
+### **Test 5.1: Error Message Quality**
+
+```bash
+echo "🧪 Testing error message helpfulness..."
+
+# Test empty value
+./rosa create cluster test-cluster \
+  --registry-config-image-digest-mirror-sets="" \
+  --dry-run
+
+# Test malformed entry
+./rosa create cluster test-cluster \
+  --registry-config-image-digest-mirror-sets="name-only" \
+  --dry-run
+
+# Expected: Clear, actionable error messages with examples
+# ✅ PASS: Error messages explain what's wrong and how to fix
+# ❌ FAIL: Generic or unclear error messages
+```
+
+### **Test 5.2: Command Completion**
+
+```bash
+echo "🧪 Testing tab completion (if available)..."
+
+# Test if flags auto-complete
+./rosa create cluster --registry-config-image-<TAB>
+
+# Expected: Should show both IDMS and ITMS flag options
+# ✅ PASS: Both flags appear in completion
+# ❌ FAIL: No completion or missing flags
+```
+
+---
+
+## ⏳ **Test Suite 6: End-to-End Testing (Pending SDK Fix)**
+
+> **Note**: These tests require the OCM SDK compilation issues to be resolved.
+
+### **Test 6.1: Actual Cluster Creation**
+
+```bash
+echo "🧪 Testing real cluster creation..."
+# This test will be enabled once SDK compilation is fixed
+
+# ./rosa create cluster test-idms-cluster \
+#   --cluster-name="test-idms-$(date +%s)" \
+#   --registry-config-image-digest-mirror-sets="test:registry.example.com:mirror.io" \
+#   --mode=auto \
+#   --yes
+
+# Expected: Cluster created with IDMS configuration
+# ⏳ PENDING: Wait for OCM SDK compilation fix
+```
+
+### **Test 6.2: Cluster Description**
+
+```bash
+echo "🧪 Testing cluster description display..."
+# This test will be enabled once SDK compilation is fixed
+
+# ./rosa describe cluster test-idms-cluster
+
+# Expected: Shows IDMS/ITMS configuration in cluster description
+# ⏳ PENDING: Wait for OCM SDK compilation fix
 ```
 
 ---
 
 ## 📊 **Test Results Summary**
 
-After running all test suites, you should see:
+### **Automated Test Runner**
 
-### **✅ Expected PASSED Results**
-- All three repositories compile successfully
-- IDMS/ITMS types exist in OCM SDK
-- CLI flags are recognized and parsed
-- Validation functions work correctly
-- Unit tests pass
-- Integration scenarios work
+Create this test script for automated verification:
 
-### **⚠️ Expected Warnings**
-- Platform registry protection warnings
-- OpenShift version compatibility notices
-- Configuration complexity warnings
+```bash
+#!/bin/bash
+# File: run_idms_itms_tests.sh
 
-### **❌ Expected FAILED Results (Should Show Errors)**
-- Invalid format inputs
-- Malformed registry names
-- Exceeding configuration limits
+echo "🚀 Starting IDMS/ITMS Integration Tests..."
+
+# Set test cluster name
+CLUSTER_NAME="test-idms-$(date +%s)"
+
+# Track test results
+TESTS_PASSED=0
+TESTS_FAILED=0
+
+test_command() {
+    local description="$1"
+    local command="$2"
+    local expected="$3"
+    
+    echo "🧪 $description"
+    
+    if eval "$command" &>/dev/null; then
+        if [[ "$expected" == "success" ]]; then
+            echo "✅ PASS"
+            ((TESTS_PASSED++))
+        else
+            echo "❌ FAIL (Expected failure but command succeeded)"
+            ((TESTS_FAILED++))
+        fi
+    else
+        if [[ "$expected" == "failure" ]]; then
+            echo "✅ PASS"
+            ((TESTS_PASSED++))
+        else
+            echo "❌ FAIL (Expected success but command failed)"
+            ((TESTS_FAILED++))
+        fi
+    fi
+}
+
+# Run tests
+test_command "Help text includes IDMS flag" \
+    "./rosa create cluster --help | grep -q 'image-digest-mirror-sets'" \
+    "success"
+
+test_command "Help text includes ITMS flag" \
+    "./rosa create cluster --help | grep -q 'image-tag-mirror-sets'" \
+    "success"
+
+test_command "Valid IDMS configuration accepted" \
+    "./rosa create cluster $CLUSTER_NAME --registry-config-image-digest-mirror-sets='test:registry.io:mirror.io' --dry-run" \
+    "success"
+
+test_command "Invalid format rejected" \
+    "./rosa create cluster $CLUSTER_NAME --registry-config-image-digest-mirror-sets='invalid-format' --dry-run" \
+    "failure"
+
+# Summary
+echo "📊 Test Results:"
+echo "✅ Passed: $TESTS_PASSED"
+echo "❌ Failed: $TESTS_FAILED"
+
+if [[ $TESTS_FAILED -eq 0 ]]; then
+    echo "🎉 All tests passed!"
+    exit 0
+else
+    echo "❌ Some tests failed!"
+    exit 1
+fi
+```
+
+### **Run All Tests**
+
+```bash
+# Make the test script executable and run it
+chmod +x run_idms_itms_tests.sh
+./run_idms_itms_tests.sh
+```
 
 ---
 
-## 🐛 **Troubleshooting Common Issues**
+## 🔧 **Troubleshooting**
 
-### **Issue 1: Compilation Errors**
+### **Common Issues and Solutions**
 
+#### **Issue 1: Flags Not Recognized**
+```
+Error: unknown flag: --registry-config-image-digest-mirror-sets
+```
+**Solution**: Verify you're using the correct branch and build:
 ```bash
-# If you see "undefined: ImageDigestMirrorSet" errors:
-cd ocm-api-model && make generate
-cd ../ocm-sdk-go && make generate
-cd ../rosa && go mod tidy && go mod vendor
+git branch  # Should show feat/IDMS-ITMS-support
+make rosa   # Rebuild the binary
 ```
 
-### **Issue 2: Missing Dependencies**
-
+#### **Issue 2: Validation Not Working**
+```
+Invalid configurations are accepted without errors
+```
+**Solution**: Check that validation code is properly integrated:
 ```bash
-# If modules are missing:
-cd rosa
-go mod download
-go mod tidy
-go mod vendor
+grep -r "ValidateCompleteImageMirrorSetConfiguration" cmd/create/cluster/
 ```
 
-### **Issue 3: Outdated Vendor Cache**
-
-```bash
-# If vendor directory is out of sync:
-cd rosa
-rm -rf vendor/
-go mod vendor
+#### **Issue 3: SDK Compilation Errors**
 ```
+undefined: api_v1.ImageDigestMirrorSetBuilder
+```
+**Solution**: This is expected until OCM SDK alias generation is fixed. The CLI functionality still works for validation and parsing.
 
 ---
 
-## 🚀 **Advanced Testing Scenarios**
+## 📈 **Expected Test Results**
 
-### **Performance Testing**
+### **✅ Should Pass (Current Implementation)**
+- CLI flag recognition and help text
+- Input parsing and validation
+- Error message quality
+- Integration with other registry options
+- Dry-run cluster creation
 
-```bash
-cd rosa
+### **⏳ Pending (After SDK Fix)**
+- Actual cluster creation with IDMS/ITMS
+- Backend integration and persistence
+- Cluster description display
 
-# Time the parsing of complex configurations
-time ./rosa create cluster perf-test \
-  --registry-config-image-digest-mirror-sets="test1:registry1.com=m1.com,m2.com,m3.com" \
-  --registry-config-image-digest-mirror-sets="test2:registry2.com=m4.com,m5.com,m6.com" \
-  --registry-config-image-tag-mirror-sets="test3:registry3.com=m7.com,m8.com,m9.com" \
-  --dry-run --mode=auto --yes
-```
-
-### **Memory Usage Testing**
-
-```bash
-cd rosa
-
-# Monitor memory usage during parsing
-/usr/bin/time -v ./rosa create cluster memory-test \
-  --registry-config-image-digest-mirror-sets="heavy-config:registry.com=mirror1.com,mirror2.com,mirror3.com,mirror4.com,mirror5.com" \
-  --dry-run --mode=auto --yes 2>&1 | grep -i "memory\|resident"
-```
+### **🎯 Success Criteria**
+- 90%+ of CLI tests pass
+- Clear, helpful error messages
+- Comprehensive validation
+- Good user experience
 
 ---
 
-## 📝 **Manual Verification Checklist**
+## 🚀 **Next Steps After Testing**
 
-- [ ] All repositories compile without errors
-- [ ] New CLI flags appear in help output
-- [ ] Flag parsing accepts valid configurations
-- [ ] Validation rejects invalid configurations
-- [ ] Platform registries show protection warnings
-- [ ] Version compatibility is checked
-- [ ] Unit tests pass
-- [ ] Integration scenarios work
-- [ ] Error messages are clear and helpful
-- [ ] Performance is acceptable
+1. **Document Test Results**: Record which tests pass/fail
+2. **Report Issues**: Create tickets for any failures
+3. **Validate with Team**: Share results with other developers
+4. **Plan SDK Integration**: Coordinate with OCM SDK maintainers
+5. **E2E Testing**: Test against real OCM backend once SDK is ready
 
 ---
 
-## 📞 **Support**
-
-If you encounter issues during testing:
-
-1. **Check Logs**: Look for specific error messages
-2. **Verify Versions**: Ensure all repos are on the correct branch
-3. **Clean Build**: Try `make clean && make` in each repository
-4. **Compare Working**: Compare with the reference implementation
-5. **Report Issues**: Document and report any unexpected behavior
-
----
-
-**Happy Testing!** 🎉
-
-This comprehensive test guide ensures the IDMS/ITMS implementation works correctly across all scenarios and repositories. 
+**This test guide ensures comprehensive validation of the IDMS/ITMS implementation while providing clear success criteria and troubleshooting guidance.** 

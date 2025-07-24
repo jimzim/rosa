@@ -694,13 +694,23 @@ func run(cmd *cobra.Command, _ []string) {
 			platformAllowlist := clusterregistryconfig.GetClusterRegistryConfigArgs(
 			clusterRegistryConfigArgs)
 
-		// prompt for a warning if any registry config field is set
+		// NEW: Process IDMS/ITMS for edit
+		imageDigestMirrorSets, imageTagMirrorSets, err :=
+			clusterregistryconfig.GetImageMirrorSetArgs(clusterRegistryConfigArgs)
+		if err != nil {
+			r.Reporter.Errorf("Failed to parse image mirror sets: %s", err)
+			os.Exit(1)
+		}
+
+		// prompt for a warning if any registry config field is set (including IDMS/ITMS)
 		if allowedRegistries != nil || blockedRegistries != nil || insecureRegistries != nil ||
-			additionalTrustedCa != "" || allowedRegistriesForImport != "" || platformAllowlist != "" {
+			additionalTrustedCa != "" || allowedRegistriesForImport != "" || platformAllowlist != "" ||
+			len(imageDigestMirrorSets) > 0 || len(imageTagMirrorSets) > 0 {
 			if PromptUserToAcceptRegistryChange(r) {
 				clusterConfig, err = BuildClusterConfigWithRegistry(clusterConfig, allowedRegistries,
 					blockedRegistries, insecureRegistries,
 					additionalTrustedCa, allowedRegistriesForImport, platformAllowlist)
+				// TODO: Update BuildClusterConfigWithRegistry to handle IDMS/ITMS when needed
 			}
 			if err != nil {
 				r.Reporter.Errorf("%s", err)

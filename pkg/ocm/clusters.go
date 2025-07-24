@@ -191,11 +191,39 @@ type Spec struct {
 	PlatformAllowlist          string
 	AdditionalTrustedCaFile    string
 	AdditionalTrustedCa        map[string]string
+
+	// NEW: IDMS/ITMS Support
+	ImageDigestMirrorSets []ImageDigestMirrorSet
+	ImageTagMirrorSets    []ImageTagMirrorSet
 }
 
 // Volume represents a volume property for a disk
 type Volume struct {
 	Size int
+}
+
+// ImageDigestMirrorSet represents a set of mirrors for digest-based image mirroring.
+// Each ImageDigestMirrorSet contains a list of mirrors that can serve images
+// based on digest matching.
+type ImageDigestMirrorSet struct {
+	Name    string        `json:"name"`
+	Mirrors []ImageMirror `json:"mirrors"`
+}
+
+// ImageTagMirrorSet represents a set of mirrors for tag-based image mirroring.
+// Each ImageTagMirrorSet contains a list of mirrors that can serve images
+// based on tag matching.
+type ImageTagMirrorSet struct {
+	Name    string        `json:"name"`
+	Mirrors []ImageMirror `json:"mirrors"`
+}
+
+// ImageMirror represents a mapping from a source registry to one or more mirror registries.
+// It supports both digest-based and tag-based mirroring depending on the context.
+type ImageMirror struct {
+	Source          string   `json:"source"`
+	MirrorsByDigest []string `json:"mirrors_by_digest,omitempty"`
+	MirrorsByTag    []string `json:"mirrors_by_tag,omitempty"`
 }
 
 type OperatorIAMRole struct {
