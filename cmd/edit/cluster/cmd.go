@@ -691,16 +691,18 @@ func run(cmd *cobra.Command, _ []string) {
 	if clusterRegistryConfigArgs != nil {
 		allowedRegistries, blockedRegistries, insecureRegistries,
 			additionalTrustedCa, allowedRegistriesForImport,
-			platformAllowlist := clusterregistryconfig.GetClusterRegistryConfigArgs(
+			platformAllowlist, imageDigestMirrorSets, imageTagMirrorSets := clusterregistryconfig.GetClusterRegistryConfigArgs(
 			clusterRegistryConfigArgs)
 
 		// prompt for a warning if any registry config field is set
 		if allowedRegistries != nil || blockedRegistries != nil || insecureRegistries != nil ||
-			additionalTrustedCa != "" || allowedRegistriesForImport != "" || platformAllowlist != "" {
+			additionalTrustedCa != "" || allowedRegistriesForImport != "" || platformAllowlist != "" ||
+			imageDigestMirrorSets != "" || imageTagMirrorSets != "" {
 			if PromptUserToAcceptRegistryChange(r) {
 				clusterConfig, err = BuildClusterConfigWithRegistry(clusterConfig, allowedRegistries,
 					blockedRegistries, insecureRegistries,
-					additionalTrustedCa, allowedRegistriesForImport, platformAllowlist)
+					additionalTrustedCa, allowedRegistriesForImport, platformAllowlist,
+					imageDigestMirrorSets, imageTagMirrorSets)
 			}
 			if err != nil {
 				r.Reporter.Errorf("%s", err)
@@ -1102,11 +1104,14 @@ func PromptUserToAcceptRegistryChange(r *rosa.Runtime) bool {
 
 func BuildClusterConfigWithRegistry(clusterConfig ocm.Spec, allowedRegistries []string,
 	blockedRegistries []string, insecureRegistries []string, additionalTrustedCa string,
-	allowedRegistriesForImport string, platformAllowlist string) (ocm.Spec, error) {
+	allowedRegistriesForImport string, platformAllowlist string, imageDigestMirrorSets string,
+	imageTagMirrorSets string) (ocm.Spec, error) {
 	clusterConfig.AllowedRegistries = allowedRegistries
 	clusterConfig.BlockedRegistries = blockedRegistries
 	clusterConfig.InsecureRegistries = insecureRegistries
 	clusterConfig.PlatformAllowlist = platformAllowlist
+	clusterConfig.ImageDigestMirrorSets = imageDigestMirrorSets
+	clusterConfig.ImageTagMirrorSets = imageTagMirrorSets
 	if additionalTrustedCa != "" {
 		ca, err := clusterregistryconfig.BuildAdditionalTrustedCAFromInputFile(additionalTrustedCa)
 		if err != nil {

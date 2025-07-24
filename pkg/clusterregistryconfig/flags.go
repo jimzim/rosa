@@ -1,7 +1,9 @@
 package clusterregistryconfig
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -23,7 +25,21 @@ const (
 	platformAllowlistFlag          = "registry-config-platform-allowlist"
 	additionalTrustedCaPathFlag    = "registry-config-additional-trusted-ca"
 	allowedRegistriesForImportFlag = "registry-config-allowed-registries-for-import"
+	imageDigestMirrorSetsFlag      = "registry-config-image-digest-mirror-sets"
+	imageTagMirrorSetsFlag         = "registry-config-image-tag-mirror-sets"
 )
+
+// ImageMirrorSet represents a single image mirror configuration
+type ImageMirrorSet struct {
+	Source  string   `json:"source"`
+	Mirrors []string `json:"mirrors"`
+}
+
+// ImageDigestMirrorSets represents the configuration for IDMS
+type ImageDigestMirrorSets []ImageMirrorSet
+
+// ImageTagMirrorSets represents the configuration for ITMS  
+type ImageTagMirrorSets []ImageMirrorSet
 
 type ClusterRegistryConfigArgs struct {
 	allowedRegistries          []string
@@ -32,6 +48,8 @@ type ClusterRegistryConfigArgs struct {
 	allowedRegistriesForImport string
 	platformAllowlist          string
 	additionalTrustedCa        string
+	imageDigestMirrorSets      string
+	imageTagMirrorSets         string
 }
 
 func AddClusterRegistryConfigFlags(cmd *cobra.Command) *ClusterRegistryConfigArgs {
@@ -84,14 +102,28 @@ func AddClusterRegistryConfigFlags(cmd *cobra.Command) *ClusterRegistryConfigArg
 		"A json file containing the registry hostname as the key,"+
 			" and the PEM-encoded certificate as the value, for each additional registry CA to trust.")
 
+	cmd.Flags().StringVar(
+		&args.imageDigestMirrorSets,
+		imageDigestMirrorSetsFlag,
+		"",
+		"A json file containing image digest mirror set configuration for redirecting image pulls by digest. "+
+			"Format: [{\"source\": \"registry.example.com\", \"mirrors\": [\"mirror1.example.com\", \"mirror2.example.com\"]}]")
+
+	cmd.Flags().StringVar(
+		&args.imageTagMirrorSets,
+		imageTagMirrorSetsFlag,
+		"",
+		"A json file containing image tag mirror set configuration for redirecting image pulls by tag. "+
+			"Format: [{\"source\": \"registry.example.com\", \"mirrors\": [\"mirror1.example.com\", \"mirror2.example.com\"]}]")
+
 	return args
 }
 
 func GetClusterRegistryConfigArgs(args *ClusterRegistryConfigArgs) (
-	[]string, []string, []string, string, string, string) {
+	[]string, []string, []string, string, string, string, string, string) {
 	return args.allowedRegistries, args.blockedRegistries,
 		args.insecureRegistries, args.additionalTrustedCa, args.allowedRegistriesForImport,
-		args.platformAllowlist
+		args.platformAllowlist, args.imageDigestMirrorSets, args.imageTagMirrorSets
 }
 
 func GetClusterRegistryConfigOptions(cmd *pflag.FlagSet,
@@ -115,6 +147,8 @@ func GetClusterRegistryConfigOptions(cmd *pflag.FlagSet,
 	result.additionalTrustedCa = args.additionalTrustedCa
 	result.allowedRegistriesForImport = args.allowedRegistriesForImport
 	result.platformAllowlist = args.platformAllowlist
+	result.imageDigestMirrorSets = args.imageDigestMirrorSets
+	result.imageTagMirrorSets = args.imageTagMirrorSets
 
 	if !IsClusterRegistryConfigSetViaCLI(cmd) && !interactive.Enabled() {
 		return nil, nil
@@ -257,7 +291,8 @@ func GetClusterRegistryConfigQuestion(cluster *cmv1.Cluster) string {
 func IsClusterRegistryConfigSetViaCLI(cmd *pflag.FlagSet) bool {
 	for _, parameter := range []string{allowedRegistriesFlag,
 		insecureRegistriesFlag, blockedRegistriesFlag, platformAllowlistFlag,
-		allowedRegistriesForImportFlag, additionalTrustedCaPathFlag} {
+		allowedRegistriesForImportFlag, additionalTrustedCaPathFlag,
+		imageDigestMirrorSetsFlag, imageTagMirrorSetsFlag} {
 
 		if cmd.Changed(parameter) {
 			return true
@@ -306,6 +341,18 @@ func BuildRegistryConfigOptions(spec ocm.Spec) string {
 			shellescape.Quote(spec.AllowedRegistriesForImport))
 	}
 
+	if spec.ImageDigestMirrorSets != "" {
+		command += fmt.Sprintf(" --%s %s",
+			imageDigestMirrorSetsFlag,
+			shellescape.Quote(spec.ImageDigestMirrorSets))
+	}
+
+	if spec.ImageTagMirrorSets != "" {
+		command += fmt.Sprintf(" --%s %s",
+			imageTagMirrorSetsFlag,
+			shellescape.Quote(spec.ImageTagMirrorSets))
+	}
+
 	return command
 }
 
@@ -331,4 +378,80 @@ func BuildAdditionalTrustedCAFromInputFile(specPath string) (map[string]string, 
 		return nil, fmt.Errorf("failed to build additional trusted certificate: %v", err)
 	}
 	return ca.AdditionalTrustedCa(), nil
+}
+
+// ParseImageDigestMirrorSetsFromFile parses IDMS configuration from a JSON file
+func ParseImageDigestMirrorSetsFromFile(filePath string) (ImageDigestMirrorSets, error) {
+	if filePath == "" {
+		return nil, nil
+	}
+
+	fileBytes, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("expected a valid image digest mirror sets spec file: %v", err)
+	}
+
+	var idmsList []ImageMirrorSet
+	err = json.Unmarshal(fileBytes, &idmsList)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse IDMS configuration: %v", err)
+	}
+
+	return ImageDigestMirrorSets(idmsList), nil
+}
+
+// ParseImageTagMirrorSetsFromFile parses ITMS configuration from a JSON file
+func ParseImageTagMirrorSetsFromFile(filePath string) (ImageTagMirrorSets, error) {
+	if filePath == "" {
+		return nil, nil
+	}
+
+	fileBytes, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("expected a valid image tag mirror sets spec file: %v", err)
+	}
+
+	var itmsList []ImageMirrorSet
+	err = json.Unmarshal(fileBytes, &itmsList)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse ITMS configuration: %v", err)
+	}
+
+	return ImageTagMirrorSets(itmsList), nil
+}
+
+// ValidateImageMirrorSet validates a single image mirror set configuration
+func ValidateImageMirrorSet(mirrorSet ImageMirrorSet) error {
+	if mirrorSet.Source == "" {
+		return fmt.Errorf("source registry cannot be empty")
+	}
+	if len(mirrorSet.Mirrors) == 0 {
+		return fmt.Errorf("at least one mirror registry must be specified")
+	}
+	for _, mirror := range mirrorSet.Mirrors {
+		if mirror == "" {
+			return fmt.Errorf("mirror registry cannot be empty")
+		}
+	}
+	return nil
+}
+
+// ValidateImageDigestMirrorSets validates IDMS configuration
+func ValidateImageDigestMirrorSets(idms ImageDigestMirrorSets) error {
+	for i, mirrorSet := range idms {
+		if err := ValidateImageMirrorSet(mirrorSet); err != nil {
+			return fmt.Errorf("IDMS entry %d: %v", i, err)
+		}
+	}
+	return nil
+}
+
+// ValidateImageTagMirrorSets validates ITMS configuration
+func ValidateImageTagMirrorSets(itms ImageTagMirrorSets) error {
+	for i, mirrorSet := range itms {
+		if err := ValidateImageMirrorSet(mirrorSet); err != nil {
+			return fmt.Errorf("ITMS entry %d: %v", i, err)
+		}
+	}
+	return nil
 }

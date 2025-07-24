@@ -3435,12 +3435,14 @@ func run(cmd *cobra.Command, _ []string) {
 	if clusterRegistryConfigArgs != nil {
 		allowedRegistries, blockedRegistries, insecureRegistries,
 			additionalTrustedCa, allowedRegistriesForImport,
-			platformAllowlist := clusterregistryconfig.GetClusterRegistryConfigArgs(
+			platformAllowlist, imageDigestMirrorSets, imageTagMirrorSets := clusterregistryconfig.GetClusterRegistryConfigArgs(
 			clusterRegistryConfigArgs)
 		clusterConfig.AllowedRegistries = allowedRegistries
 		clusterConfig.BlockedRegistries = blockedRegistries
 		clusterConfig.InsecureRegistries = insecureRegistries
 		clusterConfig.PlatformAllowlist = platformAllowlist
+		clusterConfig.ImageDigestMirrorSets = imageDigestMirrorSets
+		clusterConfig.ImageTagMirrorSets = imageTagMirrorSets
 
 		if additionalTrustedCa != "" {
 			ca, err := clusterregistryconfig.BuildAdditionalTrustedCAFromInputFile(additionalTrustedCa)

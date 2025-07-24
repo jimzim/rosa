@@ -1,0 +1,20 @@
+[
+  {
+    "source": "docker.io/library",
+    "mirrors": [
+      "mirror.registry.local:5000/library"
+    ]
+  },
+  {
+    "source": "gcr.io",
+    "mirrors": [
+      "mirror.registry.local:5000/gcr"
+    ]
+  },
+  {
+    "source": "k8s.gcr.io",
+    "mirrors": [
+      "mirror.registry.local:5000/k8s-gcr"
+    ]
+  }
+]
