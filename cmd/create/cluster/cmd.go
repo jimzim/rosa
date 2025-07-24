@@ -50,6 +50,7 @@ import (
 	"github.com/openshift/rosa/pkg/aws/tags"
 	"github.com/openshift/rosa/pkg/clusterautoscaler"
 	"github.com/openshift/rosa/pkg/clusterregistryconfig"
+	"github.com/openshift/rosa/pkg/imagemirrorconfig"
 	"github.com/openshift/rosa/pkg/fedramp"
 	"github.com/openshift/rosa/pkg/helper"
 	mpHelpers "github.com/openshift/rosa/pkg/helper/machinepools"
@@ -260,6 +261,7 @@ var args struct {
 }
 
 var clusterRegistryConfigArgs *clusterregistryconfig.ClusterRegistryConfigArgs
+var imageMirrorConfigArgs *imagemirrorconfig.ImageMirrorConfigArgs
 var autoscalerArgs *clusterautoscaler.AutoscalerArgs
 var autoscalerValidationArgs *clusterautoscaler.AutoscalerValidationArgs
 var userSpecifiedAutoscalerValues []*pflag.Flag
@@ -615,6 +617,7 @@ func initFlags(cmd *cobra.Command) {
 		"Enable autoscaling of compute nodes.",
 	)
 	clusterRegistryConfigArgs = clusterregistryconfig.AddClusterRegistryConfigFlags(cmd)
+	imageMirrorConfigArgs = imagemirrorconfig.AddImageMirrorConfigFlags(cmd)
 	autoscalerArgs = clusterautoscaler.AddClusterAutoscalerFlags(cmd, clusterAutoscalerFlagsPrefix)
 	// iterates through all autoscaling flags and stores them in slice to track user input
 	flags.VisitAll(func(f *pflag.Flag) {
@@ -3454,6 +3457,48 @@ func run(cmd *cobra.Command, _ []string) {
 		clusterConfig.AllowedRegistriesForImport = allowedRegistriesForImport
 	}
 
+	// Process image mirror configuration for IDMS/ITMS/ICSP
+	imageMirrorConfigArgs, err = imagemirrorconfig.GetImageMirrorConfigOptions(
+		cmd.Flags(), imageMirrorConfigArgs, isHostedCP)
+	if err != nil {
+		r.Reporter.Errorf("%s", err)
+		os.Exit(1)
+	}
+	if imageMirrorConfigArgs != nil {
+		imageContentSources, imageDigestMirrorSet, imageTagMirrorSet := imagemirrorconfig.GetImageMirrorConfigArgs(
+			imageMirrorConfigArgs)
+
+		// Parse and validate image content sources
+		if len(imageContentSources) > 0 {
+			ics, err := imagemirrorconfig.ParseImageContentSources(imageContentSources)
+			if err != nil {
+				r.Reporter.Errorf("Failed to parse image content sources: %s", err)
+				os.Exit(1)
+			}
+			clusterConfig.ImageContentSources = ics
+		}
+
+		// Parse and validate image digest mirror sets
+		if len(imageDigestMirrorSet) > 0 {
+			idms, err := imagemirrorconfig.ParseImageMirrorSpecs(imageDigestMirrorSet)
+			if err != nil {
+				r.Reporter.Errorf("Failed to parse image digest mirror set: %s", err)
+				os.Exit(1)
+			}
+			clusterConfig.ImageDigestMirrorSet = idms
+		}
+
+		// Parse and validate image tag mirror sets
+		if len(imageTagMirrorSet) > 0 {
+			itms, err := imagemirrorconfig.ParseImageMirrorSpecs(imageTagMirrorSet)
+			if err != nil {
+				r.Reporter.Errorf("Failed to parse image tag mirror set: %s", err)
+				os.Exit(1)
+			}
+			clusterConfig.ImageTagMirrorSet = itms
+		}
+	}
+
 	props := args.properties
 	if args.fakeCluster {
 		props = append(props, properties.FakeCluster)
@@ -4184,6 +4229,7 @@ func buildCommand(spec ocm.Spec, operatorRolesPrefix string,
 
 	command += clusterautoscaler.BuildAutoscalerOptions(spec.AutoscalerConfig, clusterAutoscalerFlagsPrefix)
 	command += clusterregistryconfig.BuildRegistryConfigOptions(spec)
+	command += imagemirrorconfig.BuildImageMirrorConfigOptions(spec)
 
 	if len(spec.AdditionalComputeSecurityGroupIds) > 0 {
 		command += fmt.Sprintf(" --%s %s",

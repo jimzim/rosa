@@ -60,6 +60,18 @@ func NewDefaultIngressSpec() DefaultIngressSpec {
 	return defaultIngressSpec
 }
 
+// ImageContentSource represents an image content source configuration for ICSP
+type ImageContentSource struct {
+	Source  string   `json:"source"`
+	Mirrors []string `json:"mirrors"`
+}
+
+// ImageMirrorSet represents a mirror configuration for IDMS or ITMS
+type ImageMirrorSet struct {
+	Source  string   `json:"source"`
+	Mirrors []string `json:"mirrors"`
+}
+
 // Spec is the configuration for a cluster spec.
 type Spec struct {
 	// Basic configs
@@ -191,6 +203,11 @@ type Spec struct {
 	PlatformAllowlist          string
 	AdditionalTrustedCaFile    string
 	AdditionalTrustedCa        map[string]string
+
+	// IDMS/ITMS Image Mirror Configuration for HCP disconnected environments
+	ImageContentSources    []ImageContentSource
+	ImageDigestMirrorSet   []ImageMirrorSet
+	ImageTagMirrorSet      []ImageMirrorSet
 }
 
 // Volume represents a volume property for a disk
@@ -856,6 +873,23 @@ func (c *Client) createClusterSpec(config Spec) (*cmv1.Cluster, error) {
 	}
 	if registryConfigBuilder != nil {
 		clusterBuilder.RegistryConfig(registryConfigBuilder)
+	}
+
+	// Build image mirror configuration for IDMS/ITMS in HCP clusters
+	if config.Hypershift.Enabled {
+		imageMirrorProps, err := BuildImageMirrorProperties(config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build image mirror configuration: %w", err)
+		}
+		if len(imageMirrorProps) > 0 {
+			// Merge image mirror properties with existing cluster properties
+			if clusterProperties == nil {
+				clusterProperties = make(map[string]string)
+			}
+			for key, value := range imageMirrorProps {
+				clusterProperties[key] = value
+			}
+		}
 	}
 
 	if config.Flavour != "" {
