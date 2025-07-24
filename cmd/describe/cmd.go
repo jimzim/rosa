@@ -26,6 +26,7 @@ import (
 	"github.com/openshift/rosa/cmd/describe/breakglasscredential"
 	"github.com/openshift/rosa/cmd/describe/cluster"
 	"github.com/openshift/rosa/cmd/describe/externalauthprovider"
+	"github.com/openshift/rosa/cmd/describe/imagemirror"
 	"github.com/openshift/rosa/cmd/describe/ingress"
 	"github.com/openshift/rosa/cmd/describe/installation"
 	"github.com/openshift/rosa/cmd/describe/kubeletconfig"
@@ -54,7 +55,7 @@ func init() {
 		machinePoolCommand, kubeletconfig,
 		autoscaler.NewDescribeAutoscalerCommand(), ingressCommand,
 		externalauthprovider.Cmd, breakglasscredential.Cmd,
-		accessrequestCommand,
+		imagemirror.Cmd, accessrequestCommand,
 	}
 	for _, cmd := range cmds {
 		Cmd.AddCommand(cmd)

@@ -28,6 +28,7 @@ import (
 	"github.com/openshift/rosa/cmd/create/dnsdomains"
 	"github.com/openshift/rosa/cmd/create/externalauthprovider"
 	"github.com/openshift/rosa/cmd/create/idp"
+	"github.com/openshift/rosa/cmd/create/imagemirror"
 	"github.com/openshift/rosa/cmd/create/kubeletconfig"
 	"github.com/openshift/rosa/cmd/create/machinepool"
 	"github.com/openshift/rosa/cmd/create/network"
@@ -71,6 +72,7 @@ func init() {
 	Cmd.AddCommand(kubeletConfig)
 	Cmd.AddCommand(externalauthprovider.Cmd)
 	Cmd.AddCommand(breakglasscredential.Cmd)
+	Cmd.AddCommand(imagemirror.Cmd)
 	decisionCommand := decision.NewCreateDecisionCommand()
 	Cmd.AddCommand(decisionCommand)
 	Cmd.AddCommand(network.NewNetworkCommand())

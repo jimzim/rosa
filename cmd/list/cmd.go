@@ -28,6 +28,7 @@ import (
 	"github.com/openshift/rosa/cmd/list/externalauthprovider"
 	"github.com/openshift/rosa/cmd/list/gates"
 	"github.com/openshift/rosa/cmd/list/idp"
+	"github.com/openshift/rosa/cmd/list/imagemirror"
 	"github.com/openshift/rosa/cmd/list/ingress"
 	"github.com/openshift/rosa/cmd/list/instancetypes"
 	"github.com/openshift/rosa/cmd/list/kubeletconfig"
@@ -79,6 +80,7 @@ func init() {
 	Cmd.AddCommand(rhRegion.Cmd)
 	Cmd.AddCommand(externalauthprovider.Cmd)
 	Cmd.AddCommand(breakglasscredential.Cmd)
+	Cmd.AddCommand(imagemirror.Cmd)
 	kubeletconfig := kubeletconfig.NewListKubeletConfigsCommand()
 	Cmd.AddCommand(kubeletconfig)
 	accessrequest := accessrequests.NewListAccessRequestsCommand()
