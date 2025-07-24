@@ -18,6 +18,7 @@ package clusterregistryconfig
 
 import (
 	"fmt"
+	"os"
 
 	. "github.com/onsi/ginkgo/v2/dsl/core"
 	. "github.com/onsi/gomega"
@@ -195,6 +196,16 @@ var _ = Describe("Cluster Registry Config tests", func() {
 			isClusterRegistryConfigSetViaCLI := IsClusterRegistryConfigSetViaCLI(flags)
 			Expect(isClusterRegistryConfigSetViaCLI).To(Equal(true))
 		})
+		It("OK: return true if sets image digest mirror sets", func() {
+			flags.Set(imageDigestMirrorSetsFlag, "idms.json")
+			isClusterRegistryConfigSetViaCLI := IsClusterRegistryConfigSetViaCLI(flags)
+			Expect(isClusterRegistryConfigSetViaCLI).To(Equal(true))
+		})
+		It("OK: return true if sets image tag mirror sets", func() {
+			flags.Set(imageTagMirrorSetsFlag, "itms.json")
+			isClusterRegistryConfigSetViaCLI := IsClusterRegistryConfigSetViaCLI(flags)
+			Expect(isClusterRegistryConfigSetViaCLI).To(Equal(true))
+		})
 	})
 
 	Context("GetClusterRegistryConfigQuestion", func() {
@@ -205,6 +216,139 @@ var _ = Describe("Cluster Registry Config tests", func() {
 		It("Asks to update cluster registry config option for existing clusters", func() {
 			question := GetClusterRegistryConfigQuestion(&cmv1.Cluster{})
 			Expect(question).To(ContainSubstring("Update"))
+		})
+	})
+
+	Context("IDMS and ITMS functionality", func() {
+		Context("ParseImageDigestMirrorSetsFromFile", func() {
+			It("OK: should parse valid IDMS configuration", func() {
+				// Create a temporary test file
+				tempFile := "/tmp/test_idms.json"
+				content := `[
+					{
+						"source": "registry.redhat.io",
+						"mirrors": ["mirror.registry.local/redhat", "backup.registry.local/redhat"]
+					},
+					{
+						"source": "quay.io/openshift",
+						"mirrors": ["mirror.registry.local/openshift"]
+					}
+				]`
+				err := os.WriteFile(tempFile, []byte(content), 0644)
+				Expect(err).NotTo(HaveOccurred())
+				defer os.Remove(tempFile)
+
+				idms, err := ParseImageDigestMirrorSetsFromFile(tempFile)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(idms)).To(Equal(2))
+				Expect(idms[0].Source).To(Equal("registry.redhat.io"))
+				Expect(len(idms[0].Mirrors)).To(Equal(2))
+				Expect(idms[0].Mirrors[0]).To(Equal("mirror.registry.local/redhat"))
+				Expect(idms[1].Source).To(Equal("quay.io/openshift"))
+			})
+
+			It("OK: should return nil for empty file path", func() {
+				idms, err := ParseImageDigestMirrorSetsFromFile("")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(idms).To(BeNil())
+			})
+
+			It("KO: should fail for non-existent file", func() {
+				_, err := ParseImageDigestMirrorSetsFromFile("non-existent.json")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("expected a valid image digest mirror sets spec file"))
+			})
+		})
+
+		Context("ValidateImageMirrorSet", func() {
+			It("OK: should validate a valid mirror set", func() {
+				mirrorSet := ImageMirrorSet{
+					Source:  "registry.redhat.io",
+					Mirrors: []string{"mirror.registry.local/redhat"},
+				}
+				err := ValidateImageMirrorSet(mirrorSet)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("KO: should fail when source is empty", func() {
+				mirrorSet := ImageMirrorSet{
+					Source:  "",
+					Mirrors: []string{"mirror.registry.local/redhat"},
+				}
+				err := ValidateImageMirrorSet(mirrorSet)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(Equal("source registry cannot be empty"))
+			})
+
+			It("KO: should fail when mirrors list is empty", func() {
+				mirrorSet := ImageMirrorSet{
+					Source:  "registry.redhat.io",
+					Mirrors: []string{},
+				}
+				err := ValidateImageMirrorSet(mirrorSet)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(Equal("at least one mirror registry must be specified"))
+			})
+
+			It("KO: should fail when a mirror is empty", func() {
+				mirrorSet := ImageMirrorSet{
+					Source:  "registry.redhat.io",
+					Mirrors: []string{"mirror.registry.local/redhat", ""},
+				}
+				err := ValidateImageMirrorSet(mirrorSet)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(Equal("mirror registry cannot be empty"))
+			})
+		})
+
+		Context("ValidateImageDigestMirrorSets", func() {
+			It("OK: should validate valid IDMS", func() {
+				idms := ImageDigestMirrorSets{
+					{
+						Source:  "registry.redhat.io",
+						Mirrors: []string{"mirror.registry.local/redhat"},
+					},
+				}
+				err := ValidateImageDigestMirrorSets(idms)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("KO: should fail when IDMS entry is invalid", func() {
+				idms := ImageDigestMirrorSets{
+					{
+						Source:  "",
+						Mirrors: []string{"mirror.registry.local/redhat"},
+					},
+				}
+				err := ValidateImageDigestMirrorSets(idms)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("IDMS entry 0"))
+			})
+		})
+
+		Context("ValidateImageTagMirrorSets", func() {
+			It("OK: should validate valid ITMS", func() {
+				itms := ImageTagMirrorSets{
+					{
+						Source:  "docker.io/library",
+						Mirrors: []string{"mirror.registry.local/library"},
+					},
+				}
+				err := ValidateImageTagMirrorSets(itms)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("KO: should fail when ITMS entry is invalid", func() {
+				itms := ImageTagMirrorSets{
+					{
+						Source:  "",
+						Mirrors: []string{"mirror.registry.local/library"},
+					},
+				}
+				err := ValidateImageTagMirrorSets(itms)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("ITMS entry 0"))
+			})
 		})
 	})
 

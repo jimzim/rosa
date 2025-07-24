@@ -1,0 +1,27 @@
+[
+  {
+    "source": "registry.redhat.io",
+    "mirrors": [
+      "mirror.registry.local:5000/redhat",
+      "backup.mirror.local:5000/redhat"
+    ]
+  },
+  {
+    "source": "quay.io/openshift-release-dev",
+    "mirrors": [
+      "mirror.registry.local:5000/openshift-release-dev"
+    ]
+  },
+  {
+    "source": "quay.io/openshift",
+    "mirrors": [
+      "mirror.registry.local:5000/openshift"
+    ]
+  },
+  {
+    "source": "registry.access.redhat.com",
+    "mirrors": [
+      "mirror.registry.local:5000/access-redhat"
+    ]
+  }
+]

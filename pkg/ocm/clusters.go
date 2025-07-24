@@ -191,6 +191,8 @@ type Spec struct {
 	PlatformAllowlist          string
 	AdditionalTrustedCaFile    string
 	AdditionalTrustedCa        map[string]string
+	ImageDigestMirrorSets      string
+	ImageTagMirrorSets         string
 }
 
 // Volume represents a volume property for a disk
