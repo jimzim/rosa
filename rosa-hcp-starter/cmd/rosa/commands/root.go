@@ -9,18 +9,26 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
+	"github.com/openshift/rosa-hcp/cmd/rosa/commands/admin"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/auth"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/cluster"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/iam"
+	"github.com/openshift/rosa-hcp/cmd/rosa/commands/idp"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/network"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/nodepool"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/oidc"
+	"github.com/openshift/rosa-hcp/cmd/rosa/commands/version"
 	"github.com/openshift/rosa-hcp/internal/config"
+	adminSvc "github.com/openshift/rosa-hcp/pkg/admin"
 	"github.com/openshift/rosa-hcp/pkg/api"
 	"github.com/openshift/rosa-hcp/pkg/aws"
 	clusterSvc "github.com/openshift/rosa-hcp/pkg/cluster"
+	iamSvc "github.com/openshift/rosa-hcp/pkg/iam"
+	idpSvc "github.com/openshift/rosa-hcp/pkg/idp"
+	networkSvc "github.com/openshift/rosa-hcp/pkg/network"
 	nodepoolSvc "github.com/openshift/rosa-hcp/pkg/nodepool"
 	oidcSvc "github.com/openshift/rosa-hcp/pkg/oidc"
+	versionSvc "github.com/openshift/rosa-hcp/pkg/version"
 )
 
 // GlobalOptions contains flags that apply to all commands
@@ -92,6 +100,11 @@ type Services struct {
 	Cluster  *clusterSvc.Service
 	NodePool *nodepoolSvc.Service
 	OIDC     *oidcSvc.Service
+	Admin    *adminSvc.Service
+	IDP      *idpSvc.Service
+	Version  *versionSvc.Service
+	IAM      iamSvc.Service
+	Network  networkSvc.Service
 }
 
 // initializeServices creates all service instances with proper dependencies
@@ -121,6 +134,18 @@ func initializeServices(ctx context.Context, cfg *config.Config, logger *slog.Lo
 		return nil, fmt.Errorf("failed to create AWS client: %w", err)
 	}
 
+	// Create IAM service
+	iamService, err := iamSvc.NewService(ctx, profile.Region, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create IAM service: %w", err)
+	}
+
+	// Create Network service
+	networkService, err := networkSvc.NewService(ctx, profile.Region, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Network service: %w", err)
+	}
+
 	// Create services
 	return &Services{
 		API:      apiClient,
@@ -128,6 +153,11 @@ func initializeServices(ctx context.Context, cfg *config.Config, logger *slog.Lo
 		Cluster:  clusterSvc.NewService(apiClient, awsClient, logger),
 		NodePool: nodepoolSvc.NewService(apiClient, awsClient, logger),
 		OIDC:     oidcSvc.NewService(apiClient, awsClient, logger),
+		Admin:    adminSvc.NewService(apiClient, logger),
+		IDP:      idpSvc.NewService(apiClient, logger),
+		Version:  versionSvc.NewService(apiClient, logger),
+		IAM:      iamService,
+		Network:  networkService,
 	}, nil
 }
 
@@ -155,6 +185,8 @@ func NewClusterCommand(ctx context.Context, cfg *config.Config, logger *slog.Log
 		NewClusterDeleteCommand(getService),
 		NewClusterListCommand(getService),
 		NewClusterDescribeCommand(getService),
+		NewClusterEditCommand(logger),
+		NewClusterUpgradeCommand(logger),
 	)
 
 	return clusterCmd
@@ -328,6 +360,16 @@ func NewClusterDescribeCommand(getService func() (*clusterSvc.Service, error)) *
 	}
 }
 
+// NewClusterEditCommand creates the cluster edit command
+func NewClusterEditCommand(logger *slog.Logger) *cobra.Command {
+	return cluster.NewEditClusterCommand(logger)
+}
+
+// NewClusterUpgradeCommand creates the cluster upgrade command
+func NewClusterUpgradeCommand(logger *slog.Logger) *cobra.Command {
+	return cluster.NewUpgradeCommand(logger)
+}
+
 // NewNodePoolCommand creates the nodepool command
 func NewNodePoolCommand(ctx context.Context, cfg *config.Config, logger *slog.Logger, opts *GlobalOptions) *cobra.Command {
 	// Function to lazily initialize services
@@ -435,9 +477,15 @@ func NewCreateCommand(ctx context.Context, cfg *config.Config, logger *slog.Logg
 
 	// Add IAM account-roles command
 	cmd.AddCommand(iam.NewCreateAccountRolesCommand(logger))
-	
-	// Add IAM operator-roles command  
+
+	// Add IAM operator-roles command
 	cmd.AddCommand(iam.NewCreateOperatorRolesCommand(logger))
+
+	// Add admin user command
+	cmd.AddCommand(admin.NewCreateCommand(logger))
+
+	// Add identity provider command
+	cmd.AddCommand(idp.NewCreateCommand(logger))
 
 	return cmd
 }
@@ -456,6 +504,18 @@ func NewListCommand(ctx context.Context, cfg *config.Config, logger *slog.Logger
 	// Add IAM account-roles list command
 	cmd.AddCommand(iam.NewListAccountRolesCommand(logger))
 
+	// Add admin list command
+	cmd.AddCommand(admin.NewListCommand(logger))
+
+	// Add IdP list command
+	cmd.AddCommand(idp.NewListCommand(logger))
+
+	// Add versions list command
+	cmd.AddCommand(version.NewListCommand(logger))
+
+	// Add upgrades list command
+	cmd.AddCommand(version.NewUpgradePathsCommand(logger))
+
 	return cmd
 }
 
@@ -472,9 +532,18 @@ func NewDeleteCommand(ctx context.Context, cfg *config.Config, logger *slog.Logg
 
 	// Add IAM account-roles delete command
 	cmd.AddCommand(iam.NewDeleteAccountRolesCommand(logger))
-	
+
 	// Add IAM operator-roles delete command
 	cmd.AddCommand(iam.NewDeleteOperatorRolesCommand(logger))
+
+	// Add admin delete command
+	cmd.AddCommand(admin.NewDeleteCommand(logger))
+
+	// Add IdP delete command
+	cmd.AddCommand(idp.NewDeleteCommand(logger))
+
+	// Add upgrade cancel command
+	cmd.AddCommand(cluster.NewCancelUpgradeCommand(logger))
 
 	return cmd
 }
