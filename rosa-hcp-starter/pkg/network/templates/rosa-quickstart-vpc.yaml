@@ -1,0 +1,490 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template to create a ROSA HCP compatible VPC
+
+Parameters:
+  AvailabilityZoneCount:
+    Type: Number
+    Description: "Number of Availability Zones to use"
+    Default: 2
+    MinValue: 1
+    MaxValue: 4
+  AZ1:
+    Type: String
+    Description: "First availability zone to use"
+    Default: ""
+  AZ2:
+    Type: String
+    Description: "Second availability zone to use"
+    Default: ""
+  AZ3:
+    Type: String
+    Description: "Third availability zone to use"
+    Default: ""
+  AZ4:
+    Type: String
+    Description: "Fourth availability zone to use"
+    Default: ""
+  Region:
+    Type: String
+    Description: "AWS Region"
+    Default: "us-west-2"
+  Name:
+    Type: String
+    Description: "Name prefix for resources"
+  VpcCidr:
+    Type: String
+    Description: CIDR block for the VPC
+    Default: '10.0.0.0/16'
+
+Conditions:
+  One: !Or
+    - !Equals [!Ref AvailabilityZoneCount, 1]
+    - !Condition Two
+  Two: !Or
+    - !Equals [!Ref AvailabilityZoneCount, 2]
+    - !Condition Three
+  Three: !Or
+    - !Equals [!Ref AvailabilityZoneCount, 3]
+    - !Condition Four
+  Four: !Equals [!Ref AvailabilityZoneCount, 4]
+  ExplicitAZs: !Not [!Equals [!Ref AZ1, ""]]
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: 'rosa_managed_policies'
+          Value: 'true'
+        - Key: 'rosa_hcp_policies'
+          Value: 'true'
+        - Key: 'service'
+          Value: 'ROSA'
+
+  S3VPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub "com.amazonaws.${Region}.s3"
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref PublicRouteTable
+        - !Ref PrivateRouteTable
+
+  # Public Subnets
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Condition: One
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [0, !Cidr [!Ref VpcCidr, 8, 8]]
+      AvailabilityZone: !If [ExplicitAZs, !Ref AZ1, !Select [0, !GetAZs '']]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${Name}-Public-Subnet-1"
+        - Key: 'rosa_managed_policies'
+          Value: 'true'
+        - Key: 'rosa_hcp_policies'
+          Value: 'true'
+        - Key: 'service'
+          Value: 'ROSA'
+        - Key: 'kubernetes.io/role/elb'
+          Value: '1'
+
+  # Private Subnets
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Condition: One
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [1, !Cidr [!Ref VpcCidr, 8, 8]]
+      AvailabilityZone: !If [ExplicitAZs, !Ref AZ1, !Select [0, !GetAZs '']]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${Name}-Private-Subnet-1"
+        - Key: 'rosa_managed_policies'
+          Value: 'true'
+        - Key: 'rosa_hcp_policies'
+          Value: 'true'
+        - Key: 'service'
+          Value: 'ROSA'
+        - Key: 'kubernetes.io/role/internal-elb'
+          Value: '1'
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Condition: Two
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [2, !Cidr [!Ref VpcCidr, 8, 8]]
+      AvailabilityZone: !If [ExplicitAZs, !Ref AZ2, !Select [1, !GetAZs '']]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${Name}-Public-Subnet-2"
+        - Key: 'rosa_managed_policies'
+          Value: 'true'
+        - Key: 'rosa_hcp_policies'
+          Value: 'true'
+        - Key: 'service'
+          Value: 'ROSA'
+        - Key: 'kubernetes.io/role/elb'
+          Value: '1'
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Condition: Two
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [3, !Cidr [!Ref VpcCidr, 8, 8]]
+      AvailabilityZone: !If [ExplicitAZs, !Ref AZ2, !Select [1, !GetAZs '']]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${Name}-Private-Subnet-2"
+        - Key: 'rosa_managed_policies'
+          Value: 'true'
+        - Key: 'rosa_hcp_policies'
+          Value: 'true'
+        - Key: 'service'
+          Value: 'ROSA'
+        - Key: 'kubernetes.io/role/internal-elb'
+          Value: '1'
+
+  PublicSubnet3:
+    Type: AWS::EC2::Subnet
+    Condition: Three
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [4, !Cidr [!Ref VpcCidr, 8, 8]]
+      AvailabilityZone: !If [ExplicitAZs, !Ref AZ3, !Select [2, !GetAZs '']]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${Name}-Public-Subnet-3"
+        - Key: 'rosa_managed_policies'
+          Value: 'true'
+        - Key: 'rosa_hcp_policies'
+          Value: 'true'
+        - Key: 'service'
+          Value: 'ROSA'
+        - Key: 'kubernetes.io/role/elb'
+          Value: '1'
+
+  PrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Condition: Three
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [5, !Cidr [!Ref VpcCidr, 8, 8]]
+      AvailabilityZone: !If [ExplicitAZs, !Ref AZ3, !Select [2, !GetAZs '']]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${Name}-Private-Subnet-3"
+        - Key: 'rosa_managed_policies'
+          Value: 'true'
+        - Key: 'rosa_hcp_policies'
+          Value: 'true'
+        - Key: 'service'
+          Value: 'ROSA'
+        - Key: 'kubernetes.io/role/internal-elb'
+          Value: '1'
+
+  PublicSubnet4:
+    Type: AWS::EC2::Subnet
+    Condition: Four
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [6, !Cidr [!Ref VpcCidr, 8, 8]]
+      AvailabilityZone: !If [ExplicitAZs, !Ref AZ4, !Select [3, !GetAZs '']]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${Name}-Public-Subnet-4"
+        - Key: 'rosa_managed_policies'
+          Value: 'true'
+        - Key: 'rosa_hcp_policies'
+          Value: 'true'
+        - Key: 'service'
+          Value: 'ROSA'
+        - Key: 'kubernetes.io/role/elb'
+          Value: '1'
+
+  PrivateSubnet4:
+    Type: AWS::EC2::Subnet
+    Condition: Four
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [7, !Cidr [!Ref VpcCidr, 8, 8]]
+      AvailabilityZone: !If [ExplicitAZs, !Ref AZ4, !Select [3, !GetAZs '']]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${Name}-Private-Subnet-4"
+        - Key: 'rosa_managed_policies'
+          Value: 'true'
+        - Key: 'rosa_hcp_policies'
+          Value: 'true'
+        - Key: 'service'
+          Value: 'ROSA'
+        - Key: 'kubernetes.io/role/internal-elb'
+          Value: '1'
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: 'service'
+          Value: 'ROSA'
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # NAT Gateway
+  NATGatewayEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${Name}-NAT-EIP"
+        - Key: 'service'
+          Value: 'ROSA'
+
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub "${Name}-NAT-Gateway"
+        - Key: 'service'
+          Value: 'ROSA'
+
+  # Route Tables
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${Name}-Public-Route-Table"
+        - Key: 'service'
+          Value: 'ROSA'
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${Name}-Private-Route-Table"
+        - Key: 'service'
+          Value: 'ROSA'
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway
+
+  # Subnet Route Table Associations
+  PublicSubnetRouteTableAssociation1:
+    Condition: One
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociation2:
+    Condition: Two
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociation3:
+    Condition: Three
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet3
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociation4:
+    Condition: Four
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet4
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateSubnetRouteTableAssociation1:
+    Condition: One
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetRouteTableAssociation2:
+    Condition: Two
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetRouteTableAssociation3:
+    Condition: Three
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet3
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetRouteTableAssociation4:
+    Condition: Four
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet4
+      RouteTableId: !Ref PrivateRouteTable
+  
+  # Security Group
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Authorize inbound VPC traffic"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: -1
+          FromPort: 0
+          ToPort: 0
+          CidrIp: "10.0.0.0/16"
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: 0
+          ToPort: 0
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+        - Key: 'service'
+          Value: 'ROSA'
+        - Key: 'rosa_managed_policies'
+          Value: 'true'
+        - Key: 'rosa_hcp_policies'
+          Value: 'true'
+
+  # VPC Endpoints for AWS services
+  EC2VPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub "com.amazonaws.${Region}.ec2"
+      PrivateDnsEnabled: true
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !If [One, !Ref PrivateSubnet1, !Ref "AWS::NoValue"]
+        - !If [Two, !Ref PrivateSubnet2, !Ref "AWS::NoValue"]
+        - !If [Three, !Ref PrivateSubnet3, !Ref "AWS::NoValue"]
+        - !If [Four, !Ref PrivateSubnet4, !Ref "AWS::NoValue"]
+      SecurityGroupIds:
+        - !Ref SecurityGroup
+
+  KMSVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub "com.amazonaws.${Region}.kms"
+      PrivateDnsEnabled: true
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !If [One, !Ref PrivateSubnet1, !Ref "AWS::NoValue"]
+        - !If [Two, !Ref PrivateSubnet2, !Ref "AWS::NoValue"]
+        - !If [Three, !Ref PrivateSubnet3, !Ref "AWS::NoValue"]
+        - !If [Four, !Ref PrivateSubnet4, !Ref "AWS::NoValue"]
+      SecurityGroupIds:
+        - !Ref SecurityGroup
+
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub "${AWS::StackName}-VPC-ID"
+
+  PublicSubnet1Id:
+    Condition: One
+    Description: Public Subnet 1 ID
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnet1-ID"
+
+  PublicSubnet2Id:
+    Condition: Two
+    Description: Public Subnet 2 ID
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnet2-ID"
+
+  PublicSubnet3Id:
+    Condition: Three
+    Description: Public Subnet 3 ID
+    Value: !Ref PublicSubnet3
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnet3-ID"
+
+  PublicSubnet4Id:
+    Condition: Four
+    Description: Public Subnet 4 ID
+    Value: !Ref PublicSubnet4
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnet4-ID"
+
+  PrivateSubnet1Id:
+    Condition: One
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateSubnet1-ID"
+
+  PrivateSubnet2Id:
+    Condition: Two
+    Description: Private Subnet 2 ID
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateSubnet2-ID"
+
+  PrivateSubnet3Id:
+    Condition: Three
+    Description: Private Subnet 3 ID
+    Value: !Ref PrivateSubnet3
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateSubnet3-ID"
+
+  PrivateSubnet4Id:
+    Condition: Four
+    Description: Private Subnet 4 ID
+    Value: !Ref PrivateSubnet4
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateSubnet4-ID"
