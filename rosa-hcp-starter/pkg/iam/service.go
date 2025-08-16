@@ -333,11 +333,67 @@ func (s *service) getHCPInlinePolicy(roleType string) string {
 func (s *service) CreateOperatorRoles(ctx context.Context, cfg RoleConfig, oidcEndpoint string, clusterID string) ([]RoleInfo, error) {
 	s.logger.Info("Creating operator roles", "cluster", clusterID, "oidc", oidcEndpoint)
 	
-	// Operator roles trust the OIDC provider
-	// Implementation would create roles for various operators (ingress, storage, etc.)
+	if oidcEndpoint == "" {
+		return nil, fmt.Errorf("OIDC endpoint is required for operator roles")
+	}
 	
-	// This is a placeholder - full implementation would create multiple operator roles
-	return []RoleInfo{}, fmt.Errorf("operator roles creation not yet implemented")
+	if clusterID == "" {
+		return nil, fmt.Errorf("cluster ID is required for operator roles")
+	}
+	
+	// Clean OIDC endpoint (remove https:// if present)
+	oidcEndpoint = strings.TrimPrefix(oidcEndpoint, "https://")
+	
+	var roles []RoleInfo
+	
+	// Define HCP operator roles
+	operators := []struct {
+		name      string
+		namespace string
+		policy    string
+	}{
+		{"ingress-operator", "openshift-ingress-operator", "IngressOperator"},
+		{"cluster-csi-drivers", "openshift-cluster-csi-drivers", "CSIDriver"},
+		{"cloud-network-config-controller", "openshift-cloud-network-config-controller", "CloudNetworkConfig"},
+		{"kube-controller-manager", "kube-system", "KubeControllerManager"},
+		{"kms-provider", "kube-system", "KMSProvider"},
+		{"control-plane-operator", "openshift-control-plane-operator", "ControlPlaneOperator"},
+		{"image-registry-operator", "openshift-image-registry", "ImageRegistry"},
+	}
+	
+	for _, op := range operators {
+		roleName := fmt.Sprintf("%s-%s-%s", cfg.Prefix, clusterID, op.name)
+		// Truncate if too long (IAM limit is 64 chars)
+		if len(roleName) > 64 {
+			roleName = roleName[:64]
+		}
+		
+		// Create trust policy for operator
+		trustPolicy := s.getOperatorTrustPolicy(oidcEndpoint, op.namespace, op.name, cfg.AccountID)
+		
+		s.logger.Info("Creating operator role", "name", roleName, "operator", op.name)
+		roleARN, err := s.ensureRole(ctx, roleName, trustPolicy, cfg)
+		if err != nil {
+			return roles, fmt.Errorf("failed to create operator role %s: %w", roleName, err)
+		}
+		
+		// Attach operator-specific policies
+		policies, err := s.attachOperatorPolicies(ctx, roleName, op.policy, cfg)
+		if err != nil {
+			return roles, fmt.Errorf("failed to attach policies to %s: %w", roleName, err)
+		}
+		
+		roles = append(roles, RoleInfo{
+			RoleName: roleName,
+			RoleARN:  roleARN,
+			RoleType: fmt.Sprintf("Operator:%s", op.name),
+			Policies: policies,
+		})
+		
+		s.logger.Info("Created operator role successfully", "role", roleName, "arn", roleARN)
+	}
+	
+	return roles, nil
 }
 
 // DeleteAccountRoles deletes account roles with the given prefix
@@ -402,9 +458,229 @@ func (s *service) DeleteAccountRoles(ctx context.Context, prefix string) error {
 	return nil
 }
 
+// getOperatorTrustPolicy returns the trust policy for operator roles
+func (s *service) getOperatorTrustPolicy(oidcEndpoint string, namespace string, operatorName string, accountID string) string {
+	// Create trust policy that trusts the OIDC provider for specific service accounts
+	policy := map[string]interface{}{
+		"Version": "2012-10-17",
+		"Statement": []map[string]interface{}{
+			{
+				"Effect": "Allow",
+				"Principal": map[string]interface{}{
+					"Federated": fmt.Sprintf("arn:%s:iam::%s:oidc-provider/%s", s.partition, accountID, oidcEndpoint),
+				},
+				"Action": "sts:AssumeRoleWithWebIdentity",
+				"Condition": map[string]interface{}{
+					"StringEquals": map[string]string{
+						fmt.Sprintf("%s:sub", oidcEndpoint): fmt.Sprintf("system:serviceaccount:%s:%s", namespace, operatorName),
+					},
+				},
+			},
+		},
+	}
+	
+	policyJSON, _ := json.Marshal(policy)
+	return string(policyJSON)
+}
+
+// attachOperatorPolicies attaches policies to operator roles
+func (s *service) attachOperatorPolicies(ctx context.Context, roleName string, policyType string, cfg RoleConfig) ([]string, error) {
+	var policies []string
+	
+	// Create inline policy with operator-specific permissions
+	// In production, these would be fine-tuned for each operator's needs
+	inlinePolicy := s.getOperatorInlinePolicy(policyType)
+	if inlinePolicy != "" {
+		policyName := fmt.Sprintf("%s-Policy", policyType)
+		_, err := s.iamClient.PutRolePolicy(ctx, &iam.PutRolePolicyInput{
+			RoleName:       aws.String(roleName),
+			PolicyName:     aws.String(policyName),
+			PolicyDocument: aws.String(inlinePolicy),
+		})
+		if err != nil {
+			return policies, fmt.Errorf("failed to attach inline policy: %w", err)
+		}
+		policies = append(policies, fmt.Sprintf("inline:%s", policyName))
+	}
+	
+	return policies, nil
+}
+
+// getOperatorInlinePolicy returns inline policy for specific operators
+func (s *service) getOperatorInlinePolicy(policyType string) string {
+	// These are simplified policies - production would need more specific permissions
+	switch policyType {
+	case "IngressOperator":
+		policy := map[string]interface{}{
+			"Version": "2012-10-17",
+			"Statement": []map[string]interface{}{
+				{
+					"Effect": "Allow",
+					"Action": []string{
+						"elasticloadbalancing:*",
+						"ec2:DescribeVpcs",
+						"ec2:DescribeSubnets",
+						"ec2:DescribeSecurityGroups",
+						"route53:ListHostedZones",
+						"route53:ChangeResourceRecordSets",
+						"tag:GetResources",
+					},
+					"Resource": "*",
+				},
+			},
+		}
+		policyJSON, _ := json.Marshal(policy)
+		return string(policyJSON)
+		
+	case "CSIDriver":
+		policy := map[string]interface{}{
+			"Version": "2012-10-17",
+			"Statement": []map[string]interface{}{
+				{
+					"Effect": "Allow",
+					"Action": []string{
+						"ec2:CreateVolume",
+						"ec2:DeleteVolume",
+						"ec2:AttachVolume",
+						"ec2:DetachVolume",
+						"ec2:DescribeVolumes",
+						"ec2:DescribeInstances",
+						"ec2:CreateSnapshot",
+						"ec2:DeleteSnapshot",
+						"ec2:DescribeSnapshots",
+						"ec2:CreateTags",
+					},
+					"Resource": "*",
+				},
+			},
+		}
+		policyJSON, _ := json.Marshal(policy)
+		return string(policyJSON)
+		
+	case "ImageRegistry":
+		policy := map[string]interface{}{
+			"Version": "2012-10-17",
+			"Statement": []map[string]interface{}{
+				{
+					"Effect": "Allow",
+					"Action": []string{
+						"s3:CreateBucket",
+						"s3:DeleteBucket",
+						"s3:GetBucketLocation",
+						"s3:ListBucket",
+						"s3:PutObject",
+						"s3:GetObject",
+						"s3:DeleteObject",
+						"s3:PutBucketTagging",
+						"s3:GetBucketTagging",
+						"s3:PutBucketPublicAccessBlock",
+						"s3:GetBucketPublicAccessBlock",
+						"s3:PutEncryptionConfiguration",
+						"s3:GetEncryptionConfiguration",
+					},
+					"Resource": "*",
+				},
+			},
+		}
+		policyJSON, _ := json.Marshal(policy)
+		return string(policyJSON)
+		
+	default:
+		// Generic policy for other operators
+		policy := map[string]interface{}{
+			"Version": "2012-10-17",
+			"Statement": []map[string]interface{}{
+				{
+					"Effect": "Allow",
+					"Action": []string{
+						"ec2:Describe*",
+						"iam:GetRole",
+						"iam:ListRolePolicies",
+						"tag:GetResources",
+					},
+					"Resource": "*",
+				},
+			},
+		}
+		policyJSON, _ := json.Marshal(policy)
+		return string(policyJSON)
+	}
+}
+
 // DeleteOperatorRoles deletes operator roles for a cluster
 func (s *service) DeleteOperatorRoles(ctx context.Context, prefix string, clusterID string) error {
-	return fmt.Errorf("operator roles deletion not yet implemented")
+	s.logger.Info("Deleting operator roles", "prefix", prefix, "cluster", clusterID)
+	
+	// List all roles with the pattern prefix-clusterID-*
+	rolePrefix := fmt.Sprintf("%s-%s-", prefix, clusterID)
+	
+	paginator := iam.NewListRolesPaginator(s.iamClient, &iam.ListRolesInput{
+		PathPrefix: aws.String("/"),
+	})
+	
+	var rolesToDelete []string
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to list roles: %w", err)
+		}
+		
+		for _, role := range page.Roles {
+			if strings.HasPrefix(*role.RoleName, rolePrefix) {
+				rolesToDelete = append(rolesToDelete, *role.RoleName)
+			}
+		}
+	}
+	
+	// Delete each role
+	for _, roleName := range rolesToDelete {
+		// Detach policies first
+		policies, err := s.iamClient.ListAttachedRolePolicies(ctx, &iam.ListAttachedRolePoliciesInput{
+			RoleName: aws.String(roleName),
+		})
+		if err != nil {
+			s.logger.Warn("Failed to list policies", "role", roleName, "error", err)
+			continue
+		}
+		
+		for _, policy := range policies.AttachedPolicies {
+			_, err = s.iamClient.DetachRolePolicy(ctx, &iam.DetachRolePolicyInput{
+				RoleName:  aws.String(roleName),
+				PolicyArn: policy.PolicyArn,
+			})
+			if err != nil {
+				s.logger.Warn("Failed to detach policy", "role", roleName, "policy", *policy.PolicyArn, "error", err)
+			}
+		}
+		
+		// Delete inline policies
+		inlinePolicies, err := s.iamClient.ListRolePolicies(ctx, &iam.ListRolePoliciesInput{
+			RoleName: aws.String(roleName),
+		})
+		if err == nil {
+			for _, policyName := range inlinePolicies.PolicyNames {
+				_, err = s.iamClient.DeleteRolePolicy(ctx, &iam.DeleteRolePolicyInput{
+					RoleName:   aws.String(roleName),
+					PolicyName: aws.String(policyName),
+				})
+				if err != nil {
+					s.logger.Warn("Failed to delete inline policy", "role", roleName, "policy", policyName, "error", err)
+				}
+			}
+		}
+		
+		// Delete the role
+		_, err = s.iamClient.DeleteRole(ctx, &iam.DeleteRoleInput{
+			RoleName: aws.String(roleName),
+		})
+		if err != nil {
+			s.logger.Warn("Failed to delete role", "role", roleName, "error", err)
+		} else {
+			s.logger.Info("Deleted operator role", "name", roleName)
+		}
+	}
+	
+	return nil
 }
 
 // ListAccountRoles lists account roles with the given prefix

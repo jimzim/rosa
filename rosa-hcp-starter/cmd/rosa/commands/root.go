@@ -429,12 +429,15 @@ func NewCreateCommand(ctx context.Context, cfg *config.Config, logger *slog.Logg
 	}
 
 	cmd.AddCommand(oidcCmd)
-	
+
 	// Add network create command
 	cmd.AddCommand(network.NewCreateCommand(logger))
-	
+
 	// Add IAM account-roles command
 	cmd.AddCommand(iam.NewCreateAccountRolesCommand(logger))
+	
+	// Add IAM operator-roles command  
+	cmd.AddCommand(iam.NewCreateOperatorRolesCommand(logger))
 
 	return cmd
 }
@@ -449,7 +452,7 @@ func NewListCommand(ctx context.Context, cfg *config.Config, logger *slog.Logger
 
 	// Add network list command
 	cmd.AddCommand(network.NewListCommand(logger))
-	
+
 	// Add IAM account-roles list command
 	cmd.AddCommand(iam.NewListAccountRolesCommand(logger))
 
@@ -466,9 +469,12 @@ func NewDeleteCommand(ctx context.Context, cfg *config.Config, logger *slog.Logg
 
 	// Add network delete command
 	cmd.AddCommand(network.NewDeleteCommand(logger))
-	
+
 	// Add IAM account-roles delete command
 	cmd.AddCommand(iam.NewDeleteAccountRolesCommand(logger))
+	
+	// Add IAM operator-roles delete command
+	cmd.AddCommand(iam.NewDeleteOperatorRolesCommand(logger))
 
 	return cmd
 }

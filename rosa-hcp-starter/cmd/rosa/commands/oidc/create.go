@@ -116,14 +116,22 @@ func runCreate(ctx context.Context, svc *oidc.Service, opts *CreateOptions) erro
 
 	writer.KeyValue(configInfo)
 
-	// Display next steps
+	// Display next steps with better integration guidance
 	output.Info("\nNext Steps:")
-	fmt.Println("  1. Create account roles with: rosa create account-roles --oidc-config-id " + config.ID)
-	fmt.Println("  2. Create a cluster with: rosa cluster create --oidc-config-id " + config.ID)
-
-	// Save OIDC config ID for future use
-	output.Info("\nTo use this OIDC configuration, add the following flag to cluster creation:")
-	fmt.Printf("  --oidc-config-id %s\n", config.ID)
+	fmt.Println("  1. Create account roles (if not already created):")
+	fmt.Println("     rosa create account-roles --region " + config.Region)
+	fmt.Println()
+	fmt.Println("  2. Create operator roles for your cluster:")
+	fmt.Printf("     rosa create operator-roles --cluster <cluster-name> --oidc-endpoint %s\n", config.IssuerURL)
+	fmt.Println()
+	fmt.Println("  3. Create a cluster with this OIDC configuration:")
+	fmt.Printf("     rosa cluster create --name <cluster-name> --oidc-config-id %s --role-arn <installer-role-arn> --subnet-ids <subnet-ids>\n", config.ID)
+	
+	// Additional helpful information
+	output.Info("\nImportant:")
+	fmt.Println("  • The OIDC endpoint URL for operator roles is: " + config.IssuerURL)
+	fmt.Printf("  • Use --oidc-config-id %s when creating clusters\n", config.ID)
+	fmt.Println("  • This OIDC configuration can be reused for multiple clusters")
 
 	return nil
 }
