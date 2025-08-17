@@ -716,6 +716,9 @@ func NewDeleteCommand(ctx context.Context, cfg *config.Config, logger *slog.Logg
 
 	// Add external auth provider delete command
 	cmd.AddCommand(externalauthprovider.NewDeleteCommand(logger))
+	
+	// Add DNS domain delete command
+	cmd.AddCommand(dnsdomain.NewDeleteCommand(logger))
 
 	return cmd
 }
@@ -749,6 +752,9 @@ func NewDescribeCommand(ctx context.Context, cfg *config.Config, logger *slog.Lo
 
 	// Add external auth provider describe command
 	cmd.AddCommand(externalauthprovider.NewDescribeCommand(logger))
+	
+	// Add break-glass credential describe command
+	cmd.AddCommand(breakglass.NewDescribeCommand(logger))
 
 	// Add other describe commands that might already exist
 
@@ -794,7 +800,11 @@ func NewVerifyCommand(ctx context.Context, cfg *config.Config, logger *slog.Logg
 	// Add network verify command
 	cmd.AddCommand(verify.NewNetworkCommand(logger))
 
-	// Add other verify commands as needed (permissions, quota, etc)
+	// Add permissions verify command
+	cmd.AddCommand(verify.NewPermissionsCommand(logger))
+	
+	// Add quota verify command
+	cmd.AddCommand(verify.NewQuotaCommand(logger))
 
 	return cmd
 }
@@ -821,11 +831,11 @@ func NewRevokeCommand(ctx context.Context, cfg *config.Config, logger *slog.Logg
 		Long:  "Revoke roles, permissions, and emergency credentials from ROSA HCP clusters.",
 	}
 
-	// Add revoke user command (placeholder - you can create a revoke command in the user package)
-	// cmd.AddCommand(user.NewRevokeCommand(logger))
+	// Add revoke user command
+	cmd.AddCommand(user.NewRevokeCommand(logger))
 
-	// Add revoke break-glass credentials command (placeholder)
-	// cmd.AddCommand(breakglass.NewRevokeCommand(logger))
+	// Add revoke break-glass credentials command
+	cmd.AddCommand(breakglass.NewRevokeCommand(logger))
 
 	return cmd
 }
@@ -855,8 +865,8 @@ func NewLogsCommand(ctx context.Context, cfg *config.Config, logger *slog.Logger
 	// Add install logs command
 	cmd.AddCommand(logs.NewInstallCommand(logger))
 
-	// Add uninstall logs command (placeholder - similar to install)
-	// cmd.AddCommand(logs.NewUninstallCommand(logger))
+	// Add uninstall logs command
+	cmd.AddCommand(logs.NewUninstallCommand(logger))
 
 	return cmd
 }

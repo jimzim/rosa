@@ -18,17 +18,21 @@ import (
 // CreateOptions contains all options for cluster creation
 type CreateOptions struct {
 	// Basic Configuration
-	Name    string
-	Region  string
-	Version string
-
+	Name         string
+	Region       string
+	Version      string
+	DomainPrefix string
+	
 	// AWS Configuration
-	RoleARN        string
-	SupportRoleARN string
-	WorkerRoleARN  string
-	ExternalID     string
-	Tags           map[string]string
-
+	RoleARN              string
+	SupportRoleARN       string
+	WorkerRoleARN        string
+	ExternalID           string
+	Tags                 map[string]string
+	DisableSCPChecks     bool
+	BillingAccount       string
+	Ec2MetadataHttpTokens string // required, optional
+	
 	// Network Configuration
 	SubnetIDs   []string
 	MachineCIDR string
@@ -43,21 +47,32 @@ type CreateOptions struct {
 	SharedVPCRoleARN          string
 	PrivateHostedZoneID       string
 	PrivateHostedZoneRoleARN  string
-
+	BaseDomain                string
+	
+	// Proxy Configuration
+	HTTPProxy               string
+	HTTPSProxy              string
+	NoProxy                 string
+	AdditionalTrustBundle   string
+	
+	// Security and Compliance
+	FIPS                    bool
+	EtcdEncryption          bool
+	EtcdEncryptionKMSARN    string
+	AuditLogRoleARN         string
+	
 	// Compute Configuration
-	ComputeNodes int
-	ComputeType  string
-
+	ComputeNodes       int
+	ComputeType        string
+	AutoscalingEnabled bool
+	MinReplicas        int
+	MaxReplicas        int
+	
 	// Advanced Configuration
 	MultiAZ            bool
-	FIPS               bool
-	EtcdEncryption     bool
-	DisableWorkloadMon bool
-	BillingAccount     string
 	OidcConfigID       string
 
 	// Operational Flags
-	DryRun      bool
 	Interactive bool
 	Output      string
 }
@@ -109,6 +124,7 @@ and improving resource efficiency.`,
 	flags.StringVar(&opts.Name, "name", "", "Name of the cluster (required)")
 	flags.StringVar(&opts.Region, "region", "", "AWS region for the cluster (required)")
 	flags.StringVar(&opts.Version, "version", "", "OpenShift version (default: latest stable)")
+	flags.StringVar(&opts.DomainPrefix, "domain-prefix", "", "Optional unique domain prefix for cluster subdomain")
 
 	// AWS Configuration flags
 	flags.StringVar(&opts.RoleARN, "role-arn", "", "ARN of the installer role")
@@ -116,6 +132,9 @@ and improving resource efficiency.`,
 	flags.StringVar(&opts.WorkerRoleARN, "worker-iam-role", "", "ARN of the worker role")
 	flags.StringVar(&opts.ExternalID, "external-id", "", "External ID for STS roles")
 	flags.StringToStringVar(&opts.Tags, "tags", nil, "AWS tags for cluster resources (key=value)")
+	flags.BoolVar(&opts.DisableSCPChecks, "disable-scp-checks", false, "Disable AWS SCP checks during installation")
+	flags.StringVar(&opts.BillingAccount, "billing-account", "", "AWS billing account ID")
+	flags.StringVar(&opts.Ec2MetadataHttpTokens, "ec2-metadata-http-tokens", "optional", "Require IMDSv2 for EC2 instances (required/optional)")
 
 	// Network Configuration flags
 	flags.StringSliceVar(&opts.SubnetIDs, "subnet-ids", nil, "AWS subnet IDs from existing VPC (comma-separated, required for HCP)")
@@ -125,18 +144,38 @@ and improving resource efficiency.`,
 	flags.IntVar(&opts.HostPrefix, "host-prefix", 23, "Host prefix for pods")
 	flags.BoolVar(&opts.Private, "private", false, "Create private cluster")
 	flags.BoolVar(&opts.PrivateLink, "private-link", false, "Use AWS PrivateLink")
+	
+	// Additional Security and VPC Options
+	flags.StringSliceVar(&opts.AdditionalSecurityGroups, "additional-security-group-ids", nil, "Additional security groups for compute nodes")
+	flags.StringVar(&opts.SharedVPCRoleARN, "shared-vpc-role-arn", "", "ARN of role for shared VPC installation")
+	flags.StringVar(&opts.PrivateHostedZoneID, "private-hosted-zone-id", "", "Private hosted zone ID for shared VPC")
+	flags.StringVar(&opts.PrivateHostedZoneRoleARN, "private-hosted-zone-role-arn", "", "ARN of role for private hosted zone")
+	flags.StringVar(&opts.BaseDomain, "base-domain", "", "Base domain for cluster")
+	
+	// Proxy Configuration
+	flags.StringVar(&opts.HTTPProxy, "http-proxy", "", "HTTP proxy URL")
+	flags.StringVar(&opts.HTTPSProxy, "https-proxy", "", "HTTPS proxy URL")
+	flags.StringVar(&opts.NoProxy, "no-proxy", "", "Comma-separated list of destinations to bypass proxy")
+	flags.StringVar(&opts.AdditionalTrustBundle, "additional-trust-bundle-file", "", "Path to PEM file with additional CA certificates")
+	
+	// Security and Compliance
+	flags.BoolVar(&opts.FIPS, "fips", false, "Enable FIPS mode")
+	flags.BoolVar(&opts.EtcdEncryption, "etcd-encryption", false, "Enable etcd encryption")
+	flags.StringVar(&opts.EtcdEncryptionKMSARN, "etcd-encryption-kms-arn", "", "ARN of KMS key for etcd encryption")
+	flags.StringVar(&opts.AuditLogRoleARN, "audit-log-arn", "", "ARN of role for audit log forwarding")
 
 	// Compute Configuration flags
 	flags.IntVar(&opts.ComputeNodes, "compute-nodes", 2, "Number of compute nodes")
 	flags.StringVar(&opts.ComputeType, "compute-type", "m5.xlarge", "EC2 instance type for compute nodes")
+	flags.BoolVar(&opts.AutoscalingEnabled, "enable-autoscaling", false, "Enable cluster autoscaling")
+	flags.IntVar(&opts.MinReplicas, "min-replicas", 2, "Minimum number of compute nodes (when autoscaling)")
+	flags.IntVar(&opts.MaxReplicas, "max-replicas", 10, "Maximum number of compute nodes (when autoscaling)")
 
 	// Advanced Configuration flags
 	flags.BoolVar(&opts.MultiAZ, "multi-az", true, "Deploy across multiple availability zones")
-	flags.BoolVar(&opts.FIPS, "fips", false, "Enable FIPS mode")
-	flags.BoolVar(&opts.EtcdEncryption, "etcd-encryption", false, "Enable etcd encryption")
-	flags.BoolVar(&opts.DisableWorkloadMon, "disable-workload-monitoring", false, "Disable workload monitoring")
-	flags.StringVar(&opts.BillingAccount, "billing-account", "", "AWS billing account ID")
 	flags.StringVar(&opts.OidcConfigID, "oidc-config-id", "", "OIDC configuration ID")
+	flags.BoolVar(&opts.DisableWorkloadMonitoring, "disable-workload-monitoring", false, "Disable workload monitoring")
+	flags.BoolVar(&opts.ExternalAuthProvidersEnabled, "external-auth-providers-enabled", false, "Enable external authentication providers")
 
 	// Operational flags
 	flags.BoolVar(&opts.DryRun, "dry-run", false, "Simulate cluster creation without creating resources")
