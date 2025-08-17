@@ -73,68 +73,83 @@ func (s *service) Create(ctx context.Context, clusterID string, config Config) (
 
 	cluster := clusterResp.Body()
 	
-	// Check if external auth is already configured
-	if cluster.ExternalAuthConfig() != nil && cluster.ExternalAuthConfig().Enabled() {
-		s.logger.InfoContext(ctx, "external auth already enabled for cluster")
+	// Check if HCP cluster
+	if cluster.Hypershift() == nil || !cluster.Hypershift().Enabled() {
+		return nil, fmt.Errorf("external auth providers are only supported for HCP clusters")
+	}
+	
+	// Check if external auth is enabled
+	if cluster.ExternalAuthConfig() == nil || !cluster.ExternalAuthConfig().Enabled() {
+		return nil, fmt.Errorf("external authentication is not enabled for this cluster. Create cluster with --external-auth-providers-enabled")
 	}
 
-	// Build the external auth config
-	// FIXED: The SDK API for external auth has changed
-	// Instead of setting individual claim mappings, we need to use a different approach
+	// Build the external auth provider (NOT external auth config)
+	// This matches what the original ROSA CLI does
+	externalAuthBuilder := cmv1.NewExternalAuth()
+	externalAuthBuilder.ID(config.Name)
 	
-	// For HCP clusters, external auth providers are managed differently
-	// The original ROSA CLI might use a different endpoint or method
-	// This is a simplified version that would need the actual API
+	// Set issuer with audiences
+	tokenIssuerBuilder := cmv1.NewTokenIssuer()
+	tokenIssuerBuilder.URL(config.IssuerURL)
+	if config.ClientID != "" {
+		tokenIssuerBuilder.Audiences(config.ClientID)
+	}
+	externalAuthBuilder.Issuer(tokenIssuerBuilder)
 	
-	// Create a patch to update the cluster with external auth config
-	claimMappings := make(map[string]interface{})
-	if config.Claims.Username != "" {
-		claimMappings["username"] = config.Claims.Username
+	// Set claim mappings if provided
+	if config.Claims.Username != "" || config.Claims.Groups != "" {
+		claimMappingsBuilder := cmv1.NewExternalAuthClaim()
+		
+		// Map username claim
+		if config.Claims.Username != "" {
+			usernameMappingBuilder := cmv1.NewUsernameClaim()
+			usernameMappingBuilder.Claim(config.Claims.Username)
+			usernameMappingBuilder.PrefixPolicy("") // No prefix by default
+			claimMappingsBuilder.Mappings(cmv1.NewTokenClaimMappings().UserName(usernameMappingBuilder))
+		}
+		
+		// Map groups claim
+		if config.Claims.Groups != "" {
+			groupsMappingBuilder := cmv1.NewGroupsClaim()
+			groupsMappingBuilder.Claim(config.Claims.Groups)
+			claimMappingsBuilder.Mappings(cmv1.NewTokenClaimMappings().Groups(groupsMappingBuilder))
+		}
+		
+		externalAuthBuilder.Claim(claimMappingsBuilder)
 	}
-	if config.Claims.Email != "" {
-		claimMappings["email"] = config.Claims.Email
-	}
-	if config.Claims.Name != "" {
-		claimMappings["name"] = config.Claims.Name
-	}
-	if config.Claims.Groups != "" {
-		claimMappings["groups"] = config.Claims.Groups
-	}
-	if config.Claims.PreferredUsername != "" {
-		claimMappings["preferred_username"] = config.Claims.PreferredUsername
+	
+	// Set console client if provided
+	if config.ClientID != "" && config.ClientSecret != "" {
+		clientConfigBuilder := cmv1.NewExternalAuthClientConfig()
+		clientConfigBuilder.ID(config.ClientID)
+		// Note: ClientSecret might need different handling
+		clientConfigBuilder.Secret(config.ClientSecret)
+		externalAuthBuilder.Clients(clientConfigBuilder)
 	}
 
-	// Build external auth config using available SDK methods
-	externalAuthBuilder := cmv1.NewExternalAuthConfig()
-	externalAuthBuilder.Enabled(true)
-	
-	// Set issuer
-	issuerBuilder := cmv1.NewTokenIssuer()
-	issuerBuilder.URL(config.IssuerURL)
-	issuerBuilder.Audiences(config.ClientID)
-	
-	// Note: The exact API might differ, this is an approximation
-	externalAuthBuilder.Issuer(issuerBuilder)
-
-	externalAuthConfig, err := externalAuthBuilder.Build()
+	externalAuth, err := externalAuthBuilder.Build()
 	if err != nil {
-		return nil, fmt.Errorf("failed to build external auth config: %w", err)
+		return nil, fmt.Errorf("failed to build external auth: %w", err)
 	}
 
-	// Update cluster with external auth config
-	_, err = s.ocm.ClustersMgmt().V1().
+	// Add the external auth provider to the cluster's external auth config
+	// This is the correct API path according to the original ROSA CLI
+	resp, err := s.ocm.ClustersMgmt().V1().
 		Clusters().Cluster(clusterID).
-		Update().
-		Body(cmv1.NewCluster().ExternalAuthConfig(externalAuthConfig)).
+		ExternalAuthConfig().
+		ExternalAuths().
+		Add().
+		Body(externalAuth).
 		SendContext(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to update cluster with external auth: %w", err)
+		return nil, fmt.Errorf("failed to create external auth provider: %w", err)
 	}
 
+	createdAuth := resp.Body()
 	s.logger.InfoContext(ctx, "external auth provider created successfully")
 
 	return &ExternalAuthProvider{
-		Name:      config.Name,
+		Name:      createdAuth.ID(),
 		IssuerURL: config.IssuerURL,
 		ClientID:  config.ClientID,
 		Claims:    config.Claims,
@@ -146,36 +161,49 @@ func (s *service) List(ctx context.Context, clusterID string) ([]*ExternalAuthPr
 	s.logger.InfoContext(ctx, "listing external auth providers",
 		slog.String("cluster", clusterID))
 
-	// Get cluster
-	clusterResp, err := s.ocm.ClustersMgmt().V1().
+	// List all external auth providers from the correct API path
+	resp, err := s.ocm.ClustersMgmt().V1().
 		Clusters().Cluster(clusterID).
-		Get().
+		ExternalAuthConfig().
+		ExternalAuths().
+		List().
+		Page(1).
+		Size(-1).
 		SendContext(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get cluster: %w", err)
+		return nil, fmt.Errorf("failed to list external auth providers: %w", err)
 	}
 
-	cluster := clusterResp.Body()
-	
+	items := resp.Items()
 	var providers []*ExternalAuthProvider
 	
-	// Check if external auth is configured
-	if cluster.ExternalAuthConfig() != nil && cluster.ExternalAuthConfig().Enabled() {
-		// Extract provider info from external auth config
-		if cluster.ExternalAuthConfig().Issuer() != nil {
-			provider := &ExternalAuthProvider{
-				Name:      "external-auth", // Default name
-				IssuerURL: cluster.ExternalAuthConfig().Issuer().URL(),
-			}
-			
-			// Extract audiences as client ID
-			if len(cluster.ExternalAuthConfig().Issuer().Audiences()) > 0 {
-				provider.ClientID = cluster.ExternalAuthConfig().Issuer().Audiences()[0]
-			}
-			
-			providers = append(providers, provider)
+	items.Each(func(auth *cmv1.ExternalAuth) bool {
+		provider := &ExternalAuthProvider{
+			Name: auth.ID(),
 		}
-	}
+		
+		// Extract issuer info
+		if auth.Issuer() != nil {
+			provider.IssuerURL = auth.Issuer().URL()
+			if len(auth.Issuer().Audiences()) > 0 {
+				provider.ClientID = auth.Issuer().Audiences()[0]
+			}
+		}
+		
+		// Extract claim mappings
+		if auth.Claim() != nil && auth.Claim().Mappings() != nil {
+			mappings := auth.Claim().Mappings()
+			if mappings.UserName() != nil {
+				provider.Claims.Username = mappings.UserName().Claim()
+			}
+			if mappings.Groups() != nil {
+				provider.Claims.Groups = mappings.Groups().Claim()
+			}
+		}
+		
+		providers = append(providers, provider)
+		return true
+	})
 
 	s.logger.InfoContext(ctx, "found external auth providers", slog.Int("count", len(providers)))
 	return providers, nil
@@ -187,18 +215,46 @@ func (s *service) Get(ctx context.Context, clusterID, providerName string) (*Ext
 		slog.String("cluster", clusterID),
 		slog.String("provider", providerName))
 
-	providers, err := s.List(ctx, clusterID)
+	// Get the specific external auth provider from the correct API path
+	resp, err := s.ocm.ClustersMgmt().V1().
+		Clusters().Cluster(clusterID).
+		ExternalAuthConfig().
+		ExternalAuths().
+		ExternalAuth(providerName).
+		Get().
+		SendContext(ctx)
 	if err != nil {
-		return nil, err
+		if resp != nil && resp.Status() == 404 {
+			return nil, fmt.Errorf("external auth provider '%s' not found", providerName)
+		}
+		return nil, fmt.Errorf("failed to get external auth provider: %w", err)
 	}
 
-	for _, provider := range providers {
-		if provider.Name == providerName {
-			return provider, nil
+	auth := resp.Body()
+	provider := &ExternalAuthProvider{
+		Name: auth.ID(),
+	}
+	
+	// Extract issuer info
+	if auth.Issuer() != nil {
+		provider.IssuerURL = auth.Issuer().URL()
+		if len(auth.Issuer().Audiences()) > 0 {
+			provider.ClientID = auth.Issuer().Audiences()[0]
+		}
+	}
+	
+	// Extract claim mappings
+	if auth.Claim() != nil && auth.Claim().Mappings() != nil {
+		mappings := auth.Claim().Mappings()
+		if mappings.UserName() != nil {
+			provider.Claims.Username = mappings.UserName().Claim()
+		}
+		if mappings.Groups() != nil {
+			provider.Claims.Groups = mappings.Groups().Claim()
 		}
 	}
 
-	return nil, fmt.Errorf("external auth provider '%s' not found", providerName)
+	return provider, nil
 }
 
 // Delete deletes an external auth provider
@@ -207,26 +263,19 @@ func (s *service) Delete(ctx context.Context, clusterID, providerName string) er
 		slog.String("cluster", clusterID),
 		slog.String("provider", providerName))
 
-	// For HCP clusters, disabling external auth means updating the cluster
-	// to remove the external auth config
-	
-	// Build an update to disable external auth
-	externalAuthBuilder := cmv1.NewExternalAuthConfig()
-	externalAuthBuilder.Enabled(false)
-	
-	externalAuthConfig, err := externalAuthBuilder.Build()
-	if err != nil {
-		return fmt.Errorf("failed to build external auth config: %w", err)
-	}
-
-	// Update cluster to disable external auth
-	_, err = s.ocm.ClustersMgmt().V1().
+	// Delete the specific external auth provider using the correct API path
+	resp, err := s.ocm.ClustersMgmt().V1().
 		Clusters().Cluster(clusterID).
-		Update().
-		Body(cmv1.NewCluster().ExternalAuthConfig(externalAuthConfig)).
+		ExternalAuthConfig().
+		ExternalAuths().
+		ExternalAuth(providerName).
+		Delete().
 		SendContext(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to update cluster: %w", err)
+		if resp != nil && resp.Status() == 404 {
+			return fmt.Errorf("external auth provider '%s' not found", providerName)
+		}
+		return fmt.Errorf("failed to delete external auth provider: %w", err)
 	}
 
 	s.logger.InfoContext(ctx, "external auth provider deleted successfully")

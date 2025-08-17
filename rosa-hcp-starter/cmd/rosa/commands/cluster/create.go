@@ -69,12 +69,15 @@ type CreateOptions struct {
 	MaxReplicas        int
 	
 	// Advanced Configuration
-	MultiAZ            bool
-	OidcConfigID       string
+	MultiAZ                      bool
+	OidcConfigID                 string
+	DisableWorkloadMonitoring    bool
+	ExternalAuthProvidersEnabled bool
 
 	// Operational Flags
 	Interactive bool
 	Output      string
+	DryRun      bool
 }
 
 // NewCreateCommand creates the cluster create command
@@ -231,7 +234,7 @@ func runCreate(ctx context.Context, svc *cluster.Service, opts *CreateOptions) e
 		MultiAZ:            opts.MultiAZ,
 		FIPS:               opts.FIPS,
 		EtcdEncryption:     opts.EtcdEncryption,
-		DisableWorkloadMon: opts.DisableWorkloadMon,
+		DisableWorkloadMon: opts.DisableWorkloadMonitoring,
 		BillingAccount:     opts.BillingAccount,
 		OidcConfigID:       opts.OidcConfigID,
 	}

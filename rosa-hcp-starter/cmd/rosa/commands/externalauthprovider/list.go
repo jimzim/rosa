@@ -77,13 +77,17 @@ func runListExternalAuth(ctx context.Context, logger *slog.Logger, opts *ListOpt
 		return fmt.Errorf("failed to create external auth service: %w", err)
 	}
 
-	// Check if supported
-	supported, err := authSvc.IsSupported(ctx, cluster.ID())
-	if err != nil {
-		return fmt.Errorf("failed to check external auth support: %w", err)
+	// Check if HCP cluster
+	if cluster.Hypershift() == nil || !cluster.Hypershift().Enabled() {
+		return fmt.Errorf("external authentication is only supported for HCP clusters")
 	}
-	if !supported {
-		return fmt.Errorf("external authentication is not supported for this cluster (HCP clusters only)")
+	
+	// Check if external auth is enabled
+	if cluster.ExternalAuthConfig() == nil || !cluster.ExternalAuthConfig().Enabled() {
+		writer := output.NewWriter(output.FormatText)
+		writer.Warning("External authentication is not enabled for this cluster")
+		writer.Info("Create cluster with --external-auth-providers-enabled to enable this feature")
+		return nil
 	}
 
 	// List providers
@@ -132,13 +136,21 @@ func runListExternalAuth(ctx context.Context, logger *slog.Logger, opts *ListOpt
 				truncate(provider.IssuerURL, 50),
 				truncate(provider.ClientID, 30))
 
-			// Show additional details if present
-			if provider.ConsoleClientID != "" {
-				fmt.Printf("  Console Client: %s\n", provider.ConsoleClientID)
-			}
-			if provider.ClaimMappings != nil {
-				fmt.Printf("  Claim Mappings: %s\n",
-					externalauthprovider.FormatClaimMappings(provider.ClaimMappings))
+			// Show additional details if present  
+			hasClaimMappings := provider.Claims.Username != "" || provider.Claims.Email != "" || 
+			                   provider.Claims.Groups != "" || provider.Claims.Name != "" || 
+			                   provider.Claims.PreferredUsername != ""
+			if hasClaimMappings {
+				claimMappings := []string{}
+				if provider.Claims.Username != "" {
+					claimMappings = append(claimMappings, fmt.Sprintf("username=%s", provider.Claims.Username))
+				}
+				if provider.Claims.Groups != "" {
+					claimMappings = append(claimMappings, fmt.Sprintf("groups=%s", provider.Claims.Groups))
+				}
+				if len(claimMappings) > 0 {
+					fmt.Printf("  Claim Mappings: %s\n", strings.Join(claimMappings, ", "))
+				}
 			}
 		}
 		fmt.Println()

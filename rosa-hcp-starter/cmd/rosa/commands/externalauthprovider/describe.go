@@ -102,9 +102,8 @@ func runDescribeExternalAuth(ctx context.Context, logger *slog.Logger, opts *Des
 
 		// Basic information
 		writer.KeyValue(map[string]string{
-			"Cluster":     cluster.Name(),
-			"Provider ID": provider.ID,
-			"Name":        provider.Name,
+			"Cluster": cluster.Name(),
+			"Name":    provider.Name,
 		})
 
 		// OIDC Configuration
@@ -114,54 +113,40 @@ func runDescribeExternalAuth(ctx context.Context, logger *slog.Logger, opts *Des
 			"Client ID":  provider.ClientID,
 		})
 
-		if len(provider.IssuerAudiences) > 0 {
-			writer.KeyValue(map[string]string{
-				"Audiences": strings.Join(provider.IssuerAudiences, ", "),
-			})
-		}
-
-		// Console configuration
-		if provider.ConsoleClientID != "" {
-			writer.Info("\nConsole Configuration:")
-			writer.KeyValue(map[string]string{
-				"Console Client ID": provider.ConsoleClientID,
-			})
-		}
-
 		// Claim mappings
 		writer.Info("\nClaim Mappings:")
-		if provider.ClaimMappings != nil {
-			if provider.ClaimMappings.Username != nil {
-				writer.KeyValue(map[string]string{
-					"Username": fmt.Sprintf("claim=%s", provider.ClaimMappings.Username.Claim),
-				})
-				if provider.ClaimMappings.Username.Prefix != "" {
-					writer.KeyValue(map[string]string{
-						"  Prefix": provider.ClaimMappings.Username.Prefix,
-					})
-				}
-			}
-			if provider.ClaimMappings.Email != nil {
-				writer.KeyValue(map[string]string{
-					"Email": fmt.Sprintf("claim=%s", provider.ClaimMappings.Email.Claim),
-				})
-			}
-			if provider.ClaimMappings.Name != nil {
-				writer.KeyValue(map[string]string{
-					"Name": fmt.Sprintf("claim=%s", provider.ClaimMappings.Name.Claim),
-				})
-			}
-			if provider.ClaimMappings.Groups != nil {
-				writer.KeyValue(map[string]string{
-					"Groups": fmt.Sprintf("claim=%s", provider.ClaimMappings.Groups.Claim),
-				})
-			}
-			if provider.ClaimMappings.PreferredUsername != nil {
-				writer.KeyValue(map[string]string{
-					"Preferred Username": fmt.Sprintf("claim=%s", provider.ClaimMappings.PreferredUsername.Claim),
-				})
-			}
-		} else {
+		hasClaimMappings := false
+		if provider.Claims.Username != "" {
+			writer.KeyValue(map[string]string{
+				"Username": fmt.Sprintf("claim=%s", provider.Claims.Username),
+			})
+			hasClaimMappings = true
+		}
+		if provider.Claims.Email != "" {
+			writer.KeyValue(map[string]string{
+				"Email": fmt.Sprintf("claim=%s", provider.Claims.Email),
+			})
+			hasClaimMappings = true
+		}
+		if provider.Claims.Name != "" {
+			writer.KeyValue(map[string]string{
+				"Name": fmt.Sprintf("claim=%s", provider.Claims.Name),
+			})
+			hasClaimMappings = true
+		}
+		if provider.Claims.Groups != "" {
+			writer.KeyValue(map[string]string{
+				"Groups": fmt.Sprintf("claim=%s", provider.Claims.Groups),
+			})
+			hasClaimMappings = true
+		}
+		if provider.Claims.PreferredUsername != "" {
+			writer.KeyValue(map[string]string{
+				"Preferred Username": fmt.Sprintf("claim=%s", provider.Claims.PreferredUsername),
+			})
+			hasClaimMappings = true
+		}
+		if !hasClaimMappings {
 			writer.Info("  Using default claim mappings")
 		}
 
@@ -178,7 +163,7 @@ func runDescribeExternalAuth(ctx context.Context, logger *slog.Logger, opts *Des
 		fmt.Printf("  • OAuth Callback:   https://oauth-%s.%s/oauth2callback/%s\n",
 			cluster.Name(), cluster.DNS().BaseDomain(), provider.Name)
 
-		if provider.ConsoleClientID != "" {
+		if provider.ClientID != "" {
 			fmt.Printf("  • Console Callback: https://console-%s.%s/auth/callback\n",
 				cluster.Name(), cluster.DNS().BaseDomain())
 		}

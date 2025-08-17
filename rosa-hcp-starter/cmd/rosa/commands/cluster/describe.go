@@ -10,6 +10,7 @@ import (
 
 	"github.com/openshift/rosa-hcp/internal/config"
 	"github.com/openshift/rosa-hcp/pkg/api"
+	"github.com/openshift/rosa-hcp/pkg/aws"
 	"github.com/openshift/rosa-hcp/pkg/cluster"
 	"github.com/openshift/rosa-hcp/pkg/output"
 )
@@ -65,11 +66,14 @@ func runDescribeCluster(ctx context.Context, logger *slog.Logger, opts *Describe
 		return fmt.Errorf("failed to create API client: %w", err)
 	}
 
-	// Create cluster service
-	clusterSvc, err := cluster.NewService(ctx, logger, apiClient.GetConnection())
+	// Create AWS client
+	awsClient, err := aws.NewClient(ctx, cfg.DefaultRegion, cfg.ActiveProfile, logger)
 	if err != nil {
-		return fmt.Errorf("failed to create cluster service: %w", err)
+		return fmt.Errorf("failed to create AWS client: %w", err)
 	}
+
+	// Create cluster service
+	clusterSvc := cluster.NewService(apiClient, awsClient, logger)
 
 	// Get the cluster
 	clusterInfo, err := clusterSvc.Get(ctx, opts.ClusterName)

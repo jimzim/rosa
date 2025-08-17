@@ -83,15 +83,15 @@ func runDescribeBreakGlass(ctx context.Context, logger *slog.Logger, opts *Descr
 		"Cluster":         opts.ClusterName,
 		"Username":        credential.Username,
 		"Status":          credential.Status,
-		"Created":         credential.CreatedAt,
+		"Created":         breakglassSvc.FormatTime(credential.CreatedAt),
 	}
 	
-	if credential.ExpirationTime != "" {
-		details["Expires"] = credential.ExpirationTime
+	if !credential.ExpirationTime.IsZero() {
+		details["Expires"] = breakglassSvc.FormatTime(credential.ExpirationTime)
 	}
 	
-	if credential.RevokedAt != "" {
-		details["Revoked"] = credential.RevokedAt
+	if !credential.RevokedAt.IsZero() {
+		details["Revoked"] = breakglassSvc.FormatTime(credential.RevokedAt)
 	}
 	
 	if credential.Description != "" {

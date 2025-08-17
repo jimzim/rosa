@@ -159,34 +159,16 @@ func (s *service) GetKubeconfig(ctx context.Context, clusterID, credentialID str
 }
 
 // Revoke revokes a specific break-glass credential
+// NOTE: The OCM API does not support revoking individual credentials
+// This method is kept for interface compatibility but returns an error
 func (s *service) Revoke(ctx context.Context, clusterID, credentialID string) error {
-	s.logger.InfoContext(ctx, "revoking break-glass credential",
+	s.logger.InfoContext(ctx, "individual break-glass credential revocation not supported",
 		slog.String("cluster", clusterID),
 		slog.String("credential", credentialID))
 
-	// FIXED: The Delete method might not exist in the SDK
-	// Alternative approach: use a POST to revoke endpoint or update status
-	// For now, we'll attempt to delete and handle the error
-	
-	// Try to delete the credential
-	_, err := s.ocm.ClustersMgmt().V1().
-		Clusters().Cluster(clusterID).
-		BreakGlassCredentials().BreakGlassCredential(credentialID).
-		Delete().
-		SendContext(ctx)
-	if err != nil {
-		// If delete doesn't work, try updating the credential to revoked status
-		// This would require a PATCH operation which might also not be available
-		s.logger.WarnContext(ctx, "failed to delete credential, attempting revocation",
-			slog.String("error", err.Error()))
-		
-		// Alternative: The API might support a revoke action
-		// This is a placeholder for the actual revocation logic
-		return fmt.Errorf("failed to revoke break-glass credential: %w", err)
-	}
-
-	s.logger.InfoContext(ctx, "break-glass credential revoked successfully")
-	return nil
+	// The OCM API only supports bulk deletion of ALL break-glass credentials
+	// Individual credential deletion is not supported
+	return fmt.Errorf("individual break-glass credential revocation is not supported. Use RevokeAll to revoke all credentials")
 }
 
 // RevokeAll revokes all break-glass credentials for a cluster
@@ -194,20 +176,18 @@ func (s *service) RevokeAll(ctx context.Context, clusterID string) error {
 	s.logger.InfoContext(ctx, "revoking all break-glass credentials",
 		slog.String("cluster", clusterID))
 
-	credentials, err := s.List(ctx, clusterID)
+	// The OCM API supports bulk deletion of all credentials
+	// This matches the original ROSA CLI behavior
+	response, err := s.ocm.ClustersMgmt().V1().
+		Clusters().Cluster(clusterID).
+		BreakGlassCredentials().
+		Delete().
+		SendContext(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to list credentials: %w", err)
-	}
-
-	var errors []error
-	for _, cred := range credentials {
-		if err := s.Revoke(ctx, clusterID, cred.ID); err != nil {
-			errors = append(errors, fmt.Errorf("failed to revoke %s: %w", cred.ID, err))
+		if response != nil && response.Status() == 404 {
+			return fmt.Errorf("no break-glass credentials found for cluster")
 		}
-	}
-
-	if len(errors) > 0 {
-		return fmt.Errorf("failed to revoke some credentials: %v", errors)
+		return fmt.Errorf("failed to revoke all break-glass credentials: %w", err)
 	}
 
 	s.logger.InfoContext(ctx, "all break-glass credentials revoked successfully")
@@ -287,4 +267,26 @@ func formatTime(t time.Time) string {
 		return ""
 	}
 	return t.Format(time.RFC3339)
+}
+
+// FormatStatus formats the credential status for display
+func FormatStatus(status string) string {
+	switch status {
+	case "issued":
+		return "Active"
+	case "revoked":
+		return "Revoked"
+	case "expired":
+		return "Expired"
+	default:
+		return status
+	}
+}
+
+// FormatTime formats a time.Time for display
+func FormatTime(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format("2006-01-02 15:04:05")
 }

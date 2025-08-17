@@ -313,54 +313,40 @@ func runCreateExternalAuth(ctx context.Context, logger *slog.Logger, opts *Creat
 		return fmt.Errorf("failed to create external auth service: %w", err)
 	}
 
-	// Check if supported
-	supported, err := authSvc.IsSupported(ctx, cluster.ID())
-	if err != nil {
-		return fmt.Errorf("failed to check external auth support: %w", err)
+	// Check if HCP cluster
+	if cluster.Hypershift() == nil || !cluster.Hypershift().Enabled() {
+		return fmt.Errorf("external authentication is only supported for HCP clusters")
 	}
-	if !supported {
-		return fmt.Errorf("external authentication is not supported for this cluster")
+	
+	// Check if external auth is enabled
+	if cluster.ExternalAuthConfig() == nil || !cluster.ExternalAuthConfig().Enabled() {
+		return fmt.Errorf("external authentication is not enabled for this cluster. Create cluster with --external-auth-providers-enabled")
 	}
 
 	// Prepare configuration
 	authConfig := externalauthprovider.Config{
-		Name:                opts.Name,
-		IssuerURL:           opts.IssuerURL,
-		ClientID:            opts.ClientID,
-		ClientSecret:        opts.ClientSecret,
-		IssuerAudiences:     opts.IssuerAudiences,
-		ConsoleClientID:     opts.ConsoleClientID,
-		ConsoleClientSecret: opts.ConsoleClientSecret,
+		Name:         opts.Name,
+		IssuerURL:    opts.IssuerURL,
+		ClientID:     opts.ClientID,
+		ClientSecret: opts.ClientSecret,
 	}
 
 	// Add claim mappings if provided
 	if len(opts.ClaimMappings) > 0 {
-		authConfig.ClaimMappings = &externalauthprovider.ClaimMappings{}
-
 		if username, ok := opts.ClaimMappings["username"]; ok {
-			authConfig.ClaimMappings.Username = &externalauthprovider.ClaimMapping{
-				Claim: username,
-			}
+			authConfig.Claims.Username = username
 		}
 		if email, ok := opts.ClaimMappings["email"]; ok {
-			authConfig.ClaimMappings.Email = &externalauthprovider.ClaimMapping{
-				Claim: email,
-			}
+			authConfig.Claims.Email = email
 		}
 		if groups, ok := opts.ClaimMappings["groups"]; ok {
-			authConfig.ClaimMappings.Groups = &externalauthprovider.ClaimMapping{
-				Claim: groups,
-			}
+			authConfig.Claims.Groups = groups
 		}
 		if name, ok := opts.ClaimMappings["name"]; ok {
-			authConfig.ClaimMappings.Name = &externalauthprovider.ClaimMapping{
-				Claim: name,
-			}
+			authConfig.Claims.Name = name
 		}
 		if preferredUsername, ok := opts.ClaimMappings["preferred_username"]; ok {
-			authConfig.ClaimMappings.PreferredUsername = &externalauthprovider.ClaimMapping{
-				Claim: preferredUsername,
-			}
+			authConfig.Claims.PreferredUsername = preferredUsername
 		}
 	}
 
@@ -373,16 +359,29 @@ func runCreateExternalAuth(ctx context.Context, logger *slog.Logger, opts *Creat
 		"Client ID":  authConfig.ClientID,
 	})
 
-	if authConfig.ConsoleClientID != "" {
-		writer.KeyValue(map[string]string{
-			"Console Client ID": authConfig.ConsoleClientID,
-		})
-	}
-
-	if authConfig.ClaimMappings != nil {
-		writer.KeyValue(map[string]string{
-			"Claim Mappings": externalauthprovider.FormatClaimMappings(authConfig.ClaimMappings),
-		})
+	// Display claim mappings if provided
+	if authConfig.Claims.Username != "" || authConfig.Claims.Groups != "" {
+		claimMappings := []string{}
+		if authConfig.Claims.Username != "" {
+			claimMappings = append(claimMappings, fmt.Sprintf("username=%s", authConfig.Claims.Username))
+		}
+		if authConfig.Claims.Email != "" {
+			claimMappings = append(claimMappings, fmt.Sprintf("email=%s", authConfig.Claims.Email))
+		}
+		if authConfig.Claims.Groups != "" {
+			claimMappings = append(claimMappings, fmt.Sprintf("groups=%s", authConfig.Claims.Groups))
+		}
+		if authConfig.Claims.Name != "" {
+			claimMappings = append(claimMappings, fmt.Sprintf("name=%s", authConfig.Claims.Name))
+		}
+		if authConfig.Claims.PreferredUsername != "" {
+			claimMappings = append(claimMappings, fmt.Sprintf("preferred_username=%s", authConfig.Claims.PreferredUsername))
+		}
+		if len(claimMappings) > 0 {
+			writer.KeyValue(map[string]string{
+				"Claim Mappings": strings.Join(claimMappings, ", "),
+			})
+		}
 	}
 
 	// Create the external auth provider
@@ -398,7 +397,7 @@ func runCreateExternalAuth(ctx context.Context, logger *slog.Logger, opts *Creat
 	writer.Info("1. Configure your OIDC provider with the correct redirect URIs:")
 	fmt.Printf("   - https://oauth-%s.%s/oauth2callback/%s\n",
 		cluster.Name(), cluster.DNS().BaseDomain(), provider.Name)
-	if provider.ConsoleClientID != "" {
+	if provider.ClientID != "" {
 		fmt.Printf("   - https://console-%s.%s/auth/callback\n",
 			cluster.Name(), cluster.DNS().BaseDomain())
 	}

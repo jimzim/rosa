@@ -174,11 +174,7 @@ func initializeServices(ctx context.Context, cfg *config.Config, logger *slog.Lo
 	}
 
 	// Create AWS client
-	awsClient, err := aws.NewClient(ctx, aws.Config{
-		Region:  profile.Region,
-		Profile: profile.Name,
-		RoleARN: profile.STS.RoleARN,
-	})
+	awsClient, err := aws.NewClient(ctx, profile.Region, profile.Name, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AWS client: %w", err)
 	}
