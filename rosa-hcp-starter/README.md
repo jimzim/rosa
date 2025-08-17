@@ -1,312 +1,393 @@
-# ROSA HCP CLI - MVP Implementation
+# ROSA CLI - HCP Edition 🚀
 
-## Overview
+> **⚠️ IMPORTANT: This CLI supports ROSA HCP (Hosted Control Planes) clusters ONLY**  
+> Classic ROSA clusters are NOT supported in this version.
 
-This is the MVP implementation of the HCP-only ROSA CLI v2.0. This version exclusively supports ROSA clusters with Hosted Control Planes (HCP), removing all Classic cluster support for a cleaner, more maintainable codebase.
+## 📋 Overview
 
-## Key Differences from v1.x
+This is the next-generation ROSA CLI built exclusively for **Hosted Control Planes (HCP)** - the future of Red Hat OpenShift on AWS. HCP provides a more scalable, cost-effective, and manageable approach to running OpenShift clusters with the control plane managed by Red Hat.
 
-| Feature | v1.x (Classic + HCP) | v2.x (HCP-Only) |
-|---------|---------------------|-----------------|
-| **Cluster Type** | Requires `--hosted-cp` flag | All clusters are HCP |
-| **IAM Roles** | 4 roles (including Control Plane) | 3 roles only |
-| **Node Management** | MachinePools and NodePools | NodePools only |
-| **Default Architecture** | Classic | HCP |
-| **Codebase Size** | ~100K lines | ~40K lines (estimated) |
+### Why HCP-Only?
 
-## Quick Start
+- **Simplified Architecture**: Control plane runs on Red Hat infrastructure
+- **Reduced Costs**: No need for control plane EC2 instances
+- **Faster Provisioning**: Clusters ready in ~15 minutes
+- **Better Multi-tenancy**: Shared control plane infrastructure
+- **Enhanced Security**: Isolated control plane with private endpoint options
 
-### Prerequisites
+## 🎯 Key Features
 
-1. **Go 1.23+** installed
-2. **AWS CLI** configured with credentials
-3. **Red Hat account** with ROSA access
+### Core Cluster Operations
+- ✅ Create, list, describe, delete HCP clusters
+- ✅ Cluster editing and scaling
+- ✅ Cluster upgrades
+- ✅ NodePool management (CRUD operations)
 
-### Build
+### Security & Access
+- ✅ External authentication providers (OIDC)
+- ✅ Break-glass emergency credentials
+- ✅ Identity providers (HTPasswd, GitHub, GitLab, Google, LDAP, OIDC)
+- ✅ User management and RBAC
+- ✅ Admin user creation
+
+### AWS Integration
+- ✅ IAM roles creation (account-roles, operator-roles)
+- ✅ OIDC configuration
+- ✅ STS authentication
+- ✅ VPC and network management
+- ✅ Audit log forwarding to CloudWatch
+
+### Performance & Operations
+- ✅ KubeletConfig customization
+- ✅ TuningConfigs (HCP-exclusive feature!)
+- ✅ Installation and uninstallation logs
+- ✅ Add-ons management
+- ✅ Ingress configuration
+- ✅ DNS domain management
+
+## 📦 Installation
+
+### From Source
 
 ```bash
+# Clone the repository
+git clone https://github.com/openshift/rosa.git
+cd rosa/rosa-hcp-starter
+
 # Build the CLI
 make build
 
-# Or build directly
-go build -o bin/rosa ./cmd/rosa
+# Install to your PATH
+sudo mv bin/rosa /usr/local/bin/rosa-hcp
+
+# Verify installation
+rosa-hcp version
 ```
 
-### Configuration
-
-Create a configuration file at `~/.rosa/config.yaml`:
-
-```yaml
-api_url: https://api.openshift.com
-token: your-ocm-token-here
-default_region: us-west-2
-profiles:
-  default:
-    region: us-west-2
-    sts:
-      role_arn: arn:aws:iam::123456789012:role/ManagedOpenShift-HCP-ROSA-Installer-Role
-      support_role_arn: arn:aws:iam::123456789012:role/ManagedOpenShift-HCP-ROSA-Support-Role
-      worker_role_arn: arn:aws:iam::123456789012:role/ManagedOpenShift-HCP-ROSA-Worker-Role
-```
-
-Or use environment variables:
+### Download Pre-built Binary (when available)
 
 ```bash
-export ROSA_TOKEN=your-ocm-token
-export AWS_REGION=us-west-2
+# macOS
+curl -LO https://github.com/openshift/rosa/releases/download/vX.Y.Z/rosa-hcp-darwin-amd64
+chmod +x rosa-hcp-darwin-amd64
+sudo mv rosa-hcp-darwin-amd64 /usr/local/bin/rosa-hcp
+
+# Linux
+curl -LO https://github.com/openshift/rosa/releases/download/vX.Y.Z/rosa-hcp-linux-amd64
+chmod +x rosa-hcp-linux-amd64
+sudo mv rosa-hcp-linux-amd64 /usr/local/bin/rosa-hcp
 ```
 
-### Usage Examples
+## 🚀 Quick Start
 
-#### Create a Cluster (Interactive)
+### 1. Initial Setup
 
 ```bash
-# Interactive mode guides you through all options
-./bin/rosa create cluster --interactive
-```
+# Login to your Red Hat account
+rosa-hcp login --use-auth-code
 
-#### Create a Cluster (Direct)
-
-```bash
-# Minimal configuration
-./bin/rosa create cluster \
-  --name my-hcp-cluster \
-  --region us-west-2
-
-# With specific configuration
-./bin/rosa create cluster \
-  --name production-cluster \
-  --region us-west-2 \
-  --version 4.14.0 \
-  --compute-nodes 3 \
-  --compute-type m5.xlarge \
-  --multi-az \
-  --private-link
-```
-
-#### Create with STS Roles
-
-```bash
-./bin/rosa create cluster \
-  --name my-cluster \
-  --region us-west-2 \
-  --role-arn arn:aws:iam::123456789012:role/ManagedOpenShift-HCP-ROSA-Installer-Role \
-  --support-role-arn arn:aws:iam::123456789012:role/ManagedOpenShift-HCP-ROSA-Support-Role \
-  --worker-iam-role arn:aws:iam::123456789012:role/ManagedOpenShift-HCP-ROSA-Worker-Role
-```
-
-## Implementation Status
-
-### ✅ Completed (MVP)
-
-- [x] `rosa create cluster` - HCP-only cluster creation
-- [x] Modern CLI framework with Charm libraries
-- [x] Interactive mode with beautiful prompts
-- [x] OCM API integration
-- [x] AWS STS integration (3 roles only)
-- [x] Configuration management
-- [x] Error handling with suggestions
-
-### 🚧 In Progress
-
-- [ ] `rosa delete cluster`
-- [ ] `rosa describe cluster`
-- [ ] `rosa list clusters`
-- [ ] `rosa create nodepool`
-- [ ] `rosa delete nodepool`
-
-### 📋 Planned
-
-- [ ] Upgrade management
-- [ ] OIDC provider creation
-- [ ] External authentication
-- [ ] Tuning configs (HCP-specific)
-- [ ] Audit log forwarding
-- [ ] Break-glass credentials
-
-## Architecture
-
-```
-rosa-hcp-starter/
-├── cmd/rosa/
-│   ├── main.go                    # Entry point
-│   └── commands/
-│       ├── root.go                 # Root command
-│       ├── cluster/                # Cluster commands
-│       │   ├── create.go           # ✅ Implemented
-│       │   └── cluster.go
-│       └── nodepool/               # NodePool commands
-├── pkg/
-│   ├── api/                        # OCM API client
-│   │   └── client.go               # ✅ Implemented
-│   ├── aws/                        # AWS operations
-│   │   └── client.go               # ✅ Implemented
-│   ├── cluster/                    # Cluster business logic
-│   │   └── service.go              # ✅ Implemented
-│   ├── nodepool/                   # NodePool logic
-│   ├── interactive/                # Interactive prompts
-│   │   └── prompts.go              # ✅ Implemented
-│   ├── output/                     # Output formatting
-│   │   └── writer.go               # ✅ Implemented
-│   └── errors/                     # Error handling
-│       └── errors.go               # ✅ Implemented
-└── internal/
-    ├── config/                     # Configuration
-    │   └── config.go               # ✅ Implemented
-    └── version/                    # Version info
-        └── version.go              # ✅ Implemented
-```
-
-## Testing
-
-### Unit Tests
-
-```bash
-# Run all tests
-make test
-
-# Run with coverage
-make coverage
-
-# Run specific package tests
-go test ./pkg/cluster/...
-```
-
-### Integration Tests
-
-```bash
-# Test cluster creation (dry-run)
-./bin/rosa create cluster \
-  --name test-cluster \
-  --region us-west-2 \
-  --dry-run
-
-# Test with mock OCM API
-OCM_API_URL=http://localhost:8080 ./bin/rosa create cluster --name test
-```
-
-## Development
-
-### Adding New Commands
-
-1. Create command file in appropriate package:
-```go
-// cmd/rosa/commands/cluster/describe.go
-func NewDescribeCommand(svc *cluster.Service) *cobra.Command {
-    // Implementation
-}
-```
-
-2. Add to parent command:
-```go
-// cmd/rosa/commands/cluster/cluster.go
-cmd.AddCommand(
-    NewDescribeCommand(svc),
-)
-```
-
-3. Implement service logic:
-```go
-// pkg/cluster/service.go
-func (s *Service) Describe(ctx context.Context, clusterID string) (*Cluster, error) {
-    // Implementation
-}
-```
-
-### Code Style
-
-- Use structured logging with `slog`
-- Return `errors.Result[T]` for operations that can fail
-- Use Charm libraries for all terminal UI
-- Context-aware operations throughout
-- Comprehensive error messages with suggestions
-
-## Migration from v1.x
-
-### For Users
-
-```bash
-# Install v2 (HCP-only)
-brew install rosa
-
-# Keep v1 for Classic clusters
-brew install rosa@1
-
-# Check version
-rosa version
-# Output: 2.0.0-dev (HCP-Only Edition)
-```
-
-### Breaking Changes
-
-1. **No Classic Support**: Cannot create Classic clusters
-2. **No `--hosted-cp` flag**: All clusters are HCP
-3. **NodePools only**: No MachinePool commands
-4. **3 IAM roles**: Control Plane role not needed
-5. **STS only**: No mint mode support
-
-## Contributing
-
-### Development Setup
-
-```bash
-# Clone the repo
-git clone https://github.com/openshift/rosa.git
-cd rosa
-
-# Checkout v2 branch
-git checkout v2-hcp-only
-
-# Install dependencies
-cd rosa-hcp-starter
-go mod download
-
-# Install dev tools
-make install-tools
-```
-
-### Testing Your Changes
-
-1. Build: `make build`
-2. Test: `make test`
-3. Lint: `make lint`
-4. Format: `make fmt`
-
-## Troubleshooting
-
-### Common Issues
-
-#### Authentication Error
-```
-Error: failed to create OCM connection
-```
-**Solution**: Ensure your OCM token is valid:
-```bash
-rosa login --token $OCM_TOKEN
-```
-
-#### AWS Credentials Error
-```
-Error: failed to validate installer role
-```
-**Solution**: Check AWS credentials and role permissions:
-```bash
+# Verify AWS credentials
 aws sts get-caller-identity
-rosa verify permissions
+
+# Initialize your AWS account for ROSA
+rosa-hcp init
+
+# Verify permissions
+rosa-hcp verify permissions
 ```
 
-#### Invalid Cluster Name
-```
-Error: cluster name must start with a lowercase letter
-```
-**Solution**: Use lowercase letters, numbers, and hyphens only.
+### 2. Create Prerequisites
 
-## Support
+```bash
+# Create account-wide IAM roles
+rosa-hcp create account-roles --mode auto --yes
 
-- **Documentation**: [ROSA HCP Docs](https://docs.openshift.com/rosa/rosa_hcp)
+# Create OIDC configuration
+rosa-hcp create oidc-config --mode auto --yes
+
+# Create a VPC (or use existing)
+rosa-hcp create network --name my-vpc --region us-east-1
+```
+
+### 3. Create an HCP Cluster
+
+```bash
+# Interactive mode (recommended for first time)
+rosa-hcp create cluster --interactive
+
+# Or with explicit parameters
+rosa-hcp create cluster \
+  --cluster-name my-hcp-cluster \
+  --region us-east-1 \
+  --subnet-ids subnet-xxx,subnet-yyy,subnet-zzz \
+  --sts \
+  --mode auto
+```
+
+### 4. Create a NodePool
+
+```bash
+# Create a nodepool for your workloads
+rosa-hcp create nodepool \
+  --cluster my-hcp-cluster \
+  --name worker \
+  --replicas 3 \
+  --instance-type m5.xlarge
+```
+
+### 5. Access Your Cluster
+
+```bash
+# Create an admin user
+rosa-hcp create admin --cluster my-hcp-cluster
+
+# Get cluster credentials
+rosa-hcp describe cluster --cluster my-hcp-cluster
+
+# Configure kubectl
+oc login <api-url> -u cluster-admin -p <password>
+```
+
+## 📚 Common Workflows
+
+### Cluster Lifecycle Management
+
+```bash
+# List all clusters
+rosa-hcp list clusters
+
+# Describe cluster details
+rosa-hcp describe cluster --cluster my-cluster
+
+# Edit cluster (scaling, network settings, etc.)
+rosa-hcp edit cluster --cluster my-cluster --min-replicas 3 --max-replicas 10
+
+# Upgrade cluster
+rosa-hcp upgrade cluster --cluster my-cluster --version 4.14.10
+
+# Delete cluster
+rosa-hcp delete cluster --cluster my-cluster --yes
+```
+
+### NodePool Management
+
+```bash
+# List nodepools
+rosa-hcp list nodepools --cluster my-cluster
+
+# Scale a nodepool
+rosa-hcp edit nodepool --cluster my-cluster --nodepool worker --replicas 5
+
+# Add labels and taints
+rosa-hcp edit nodepool --cluster my-cluster --nodepool worker \
+  --labels workload=frontend \
+  --taints key1=value1:NoSchedule
+
+# Delete nodepool
+rosa-hcp delete nodepool --cluster my-cluster --nodepool worker --yes
+```
+
+### Security Configuration
+
+```bash
+# Configure external authentication
+rosa-hcp create external-auth-provider \
+  --cluster my-cluster \
+  --issuer-url https://auth.example.com \
+  --client-id my-app \
+  --client-secret <secret>
+
+# Create break-glass credentials (emergency access)
+rosa-hcp create break-glass-credential \
+  --cluster my-cluster \
+  --username emergency-admin \
+  --expiration 24h
+
+# Set up identity provider
+rosa-hcp create idp \
+  --cluster my-cluster \
+  --type github \
+  --name github-auth \
+  --organizations my-org
+
+# Grant user permissions
+rosa-hcp grant user cluster-admin \
+  --cluster my-cluster \
+  --user alice@example.com
+```
+
+### Performance Tuning (HCP Exclusive!)
+
+```bash
+# Create custom kubelet configuration
+rosa-hcp create kubeletconfig \
+  --cluster my-cluster \
+  --name high-pods \
+  --pod-pids-limit 4096
+
+# Create TuningConfig for performance optimization
+rosa-hcp create tuning-config \
+  --cluster my-cluster \
+  --name my-tuning \
+  --spec-file tuned-config.yaml
+
+# Apply configs to nodepool
+rosa-hcp edit nodepool \
+  --cluster my-cluster \
+  --nodepool worker \
+  --kubelet-configs high-pods \
+  --tuning-configs my-tuning
+```
+
+### Add-ons and Services
+
+```bash
+# List available add-ons
+rosa-hcp list addons
+
+# Install an add-on
+rosa-hcp install addon \
+  --cluster my-cluster \
+  --addon cluster-logging-operator
+
+# Configure multiple ingresses
+rosa-hcp create ingress \
+  --cluster my-cluster \
+  --name apps \
+  --lb-type nlb \
+  --replicas 2
+```
+
+### Monitoring and Troubleshooting
+
+```bash
+# View installation logs
+rosa-hcp logs install --cluster my-cluster --watch
+
+# Verify network configuration
+rosa-hcp verify network --subnet-ids subnet-xxx,subnet-yyy
+
+# List cluster versions
+rosa-hcp list versions --channel-group stable
+
+# Check cluster status
+rosa-hcp describe cluster --cluster my-cluster
+```
+
+## 🏗️ Architecture
+
+### HCP Cluster Structure
+
+```
+┌─────────────────────────────────────┐
+│      Red Hat Infrastructure         │
+│  ┌─────────────────────────────┐   │
+│  │   Control Plane (Managed)    │   │
+│  │  - API Server                │   │
+│  │  - etcd                      │   │
+│  │  - Controller Manager        │   │
+│  │  - Scheduler                 │   │
+│  └─────────────────────────────┘   │
+└─────────────────────────────────────┘
+              ↕️ Private Link
+┌─────────────────────────────────────┐
+│        Your AWS Account             │
+│  ┌─────────────────────────────┐   │
+│  │      VPC                     │   │
+│  │  ┌────────────────────┐     │   │
+│  │  │   NodePool(s)       │     │   │
+│  │  │  - Worker Nodes     │     │   │
+│  │  │  - Your Workloads   │     │   │
+│  │  └────────────────────┘     │   │
+│  └─────────────────────────────┘   │
+└─────────────────────────────────────┘
+```
+
+## 🔧 Configuration
+
+### Config File Location
+
+```bash
+~/.rosa-hcp/config.yaml
+```
+
+### Environment Variables
+
+```bash
+# API Configuration
+export ROSA_API_URL=https://api.openshift.com
+
+# AWS Configuration  
+export AWS_REGION=us-east-1
+export AWS_PROFILE=my-profile
+
+# Authentication
+export ROSA_TOKEN=<your-token>
+
+# Output Format
+export ROSA_OUTPUT=json  # or yaml, text
+```
+
+### Profiles
+
+```bash
+# Create a profile
+rosa-hcp config set --profile production --region us-east-1
+
+# Use a profile
+rosa-hcp list clusters --profile production
+```
+
+## 🤝 Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## 📝 Differences from Classic ROSA
+
+| Feature | Classic ROSA | ROSA HCP |
+|---------|-------------|----------|
+| Control Plane Location | Customer AWS Account | Red Hat Infrastructure |
+| Control Plane Nodes | 3+ EC2 instances | Shared, managed |
+| Provisioning Time | 30-45 minutes | 10-15 minutes |
+| Minimum EC2 Instances | 6+ (3 control + 3 worker) | 2+ (workers only) |
+| Control Plane Scaling | Manual | Automatic |
+| Control Plane Costs | Customer pays | Included in subscription |
+| TuningConfigs Support | ❌ | ✅ |
+| Multi-zone Control Plane | Requires 3 zones | Not required |
+| Private Link Support | ✅ | ✅ |
+| BYOVPC | ✅ | ✅ (Required) |
+
+## ⚠️ Important Notes
+
+1. **HCP-Only**: This CLI does NOT support classic ROSA clusters
+2. **VPC Required**: HCP clusters require an existing VPC with subnets
+3. **STS Mandatory**: All HCP clusters use STS authentication
+4. **No Control Plane Access**: Control plane runs on Red Hat infrastructure
+5. **NodePools**: Worker nodes are managed through NodePool resources
+
+## 🆘 Support
+
+- **Documentation**: [https://docs.openshift.com/rosa](https://docs.openshift.com/rosa)
 - **Issues**: [GitHub Issues](https://github.com/openshift/rosa/issues)
-- **Community**: [OpenShift Slack](https://slack.openshift.io/)
+- **Red Hat Support**: Available with active subscription
 
-## License
+## 📜 License
 
-Apache License 2.0
+Apache License 2.0 - See [LICENSE](LICENSE) for details.
+
+## 🎯 Roadmap
+
+- [x] Core HCP cluster operations
+- [x] Complete IAM/STS integration
+- [x] NodePool management
+- [x] External authentication
+- [x] Performance tuning features
+- [x] Add-ons support
+- [ ] Cluster templates
+- [ ] Cost estimation
+- [ ] Backup/restore operations
+- [ ] GitOps integration
+
+---
+
+**Built with ❤️ for the OpenShift community**
