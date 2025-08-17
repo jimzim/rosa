@@ -14,20 +14,21 @@ import (
 
 // CreateOptions contains options for creating a node pool
 type CreateOptions struct {
-	ClusterID     string
-	Name          string
-	Replicas      int
-	MinReplicas   int
-	MaxReplicas   int
-	InstanceType  string
-	DiskSize      int
-	Labels        map[string]string
-	Taints        []string
-	Version       string
-	Subnet        string
-	AutoRepair    bool
-	Autoscaling   bool
-	TuningConfigs []string
+	ClusterID      string
+	Name           string
+	Replicas       int
+	MinReplicas    int
+	MaxReplicas    int
+	InstanceType   string
+	DiskSize       int
+	Labels         map[string]string
+	Taints         []string
+	Version        string
+	Subnet         string
+	AutoRepair     bool
+	Autoscaling    bool
+	KubeletConfigs []string
+	TuningConfigs  []string
 }
 
 // NewCreateCommand creates the nodepool create command
@@ -73,7 +74,8 @@ allowing for greater flexibility in managing your compute resources.`,
 	flags.StringVar(&opts.Version, "version", "", "OpenShift version (defaults to cluster version)")
 	flags.StringVar(&opts.Subnet, "subnet", "", "AWS subnet ID")
 	flags.BoolVar(&opts.AutoRepair, "auto-repair", true, "Enable auto-repair")
-	flags.StringSliceVar(&opts.TuningConfigs, "tuning-configs", nil, "Tuning configs to apply")
+	flags.StringSliceVar(&opts.KubeletConfigs, "kubelet-configs", nil, "KubeletConfigs to apply")
+	flags.StringSliceVar(&opts.TuningConfigs, "tuning-configs", nil, "TuningConfigs to apply")
 
 	cmd.MarkFlagRequired("cluster")
 	cmd.MarkFlagRequired("name")
@@ -141,20 +143,21 @@ func runCreate(ctx context.Context, svc *nodepool.Service, opts *CreateOptions) 
 
 	// Create the node pool
 	config := nodepool.CreateConfig{
-		ClusterID:     opts.ClusterID,
-		Name:          opts.Name,
-		Replicas:      opts.Replicas,
-		MinReplicas:   opts.MinReplicas,
-		MaxReplicas:   opts.MaxReplicas,
-		InstanceType:  opts.InstanceType,
-		DiskSize:      opts.DiskSize,
-		Labels:        opts.Labels,
-		Taints:        parseTaints(opts.Taints),
-		Version:       opts.Version,
-		Subnet:        opts.Subnet,
-		AutoRepair:    opts.AutoRepair,
-		Autoscaling:   opts.Autoscaling,
-		TuningConfigs: opts.TuningConfigs,
+		ClusterID:      opts.ClusterID,
+		Name:           opts.Name,
+		Replicas:       opts.Replicas,
+		MinReplicas:    opts.MinReplicas,
+		MaxReplicas:    opts.MaxReplicas,
+		InstanceType:   opts.InstanceType,
+		DiskSize:       opts.DiskSize,
+		Labels:         opts.Labels,
+		Taints:         parseTaints(opts.Taints),
+		Version:        opts.Version,
+		Subnet:         opts.Subnet,
+		AutoRepair:     opts.AutoRepair,
+		Autoscaling:    opts.Autoscaling,
+		KubeletConfigs: opts.KubeletConfigs,
+		TuningConfigs:  opts.TuningConfigs,
 	}
 
 	np, err := svc.Create(ctx, config)
@@ -181,6 +184,22 @@ func runCreate(ctx context.Context, svc *nodepool.Service, opts *CreateOptions) 
 	}
 
 	writer.KeyValue(npInfo)
+
+	// Show KubeletConfigs if present
+	if len(np.KubeletConfigs) > 0 {
+		output.Info("\nKubeletConfigs:")
+		for _, kc := range np.KubeletConfigs {
+			fmt.Printf("  - %s\n", kc)
+		}
+	}
+
+	// Show TuningConfigs if present
+	if len(np.TuningConfigs) > 0 {
+		output.Info("\nTuningConfigs:")
+		for _, tc := range np.TuningConfigs {
+			fmt.Printf("  - %s\n", tc)
+		}
+	}
 
 	output.Info("\nThe node pool is being created. This may take several minutes.")
 	output.Info("To check the status, run:")

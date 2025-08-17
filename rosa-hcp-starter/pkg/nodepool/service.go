@@ -30,23 +30,24 @@ func NewService(ocm api.Client, aws aws.Client, logger *slog.Logger) *Service {
 
 // NodePool represents a node pool
 type NodePool struct {
-	ID            string
-	Name          string
-	State         string
-	Replicas      int
-	MinReplicas   int
-	MaxReplicas   int
-	InstanceType  string
-	DiskSize      int
-	Labels        map[string]string
-	Taints        []Taint
-	Version       string
-	Subnet        string
-	AutoRepair    bool
-	Autoscaling   bool
-	TuningConfigs []string
-	Message       string
-	CreatedAt     time.Time
+	ID             string
+	Name           string
+	State          string
+	Replicas       int
+	MinReplicas    int
+	MaxReplicas    int
+	InstanceType   string
+	DiskSize       int
+	Labels         map[string]string
+	Taints         []Taint
+	Version        string
+	Subnet         string
+	AutoRepair     bool
+	Autoscaling    bool
+	KubeletConfigs []string
+	TuningConfigs  []string
+	Message        string
+	CreatedAt      time.Time
 }
 
 // Taint represents a node taint
@@ -58,20 +59,21 @@ type Taint struct {
 
 // CreateConfig holds node pool creation configuration
 type CreateConfig struct {
-	ClusterID     string
-	Name          string
-	Replicas      int
-	MinReplicas   int
-	MaxReplicas   int
-	InstanceType  string
-	DiskSize      int
-	Labels        map[string]string
-	Taints        []Taint
-	Version       string
-	Subnet        string
-	AutoRepair    bool
-	Autoscaling   bool
-	TuningConfigs []string
+	ClusterID      string
+	Name           string
+	Replicas       int
+	MinReplicas    int
+	MaxReplicas    int
+	InstanceType   string
+	DiskSize       int
+	Labels         map[string]string
+	Taints         []Taint
+	Version        string
+	Subnet         string
+	AutoRepair     bool
+	Autoscaling    bool
+	KubeletConfigs []string
+	TuningConfigs  []string
 }
 
 // UpdateConfig holds node pool update configuration
@@ -139,6 +141,11 @@ func (s *Service) Create(ctx context.Context, config CreateConfig) (*NodePool, e
 
 	// Set auto-repair
 	builder.AutoRepair(config.AutoRepair)
+
+	// Set kubelet configs
+	if len(config.KubeletConfigs) > 0 {
+		builder.KubeletConfigs(config.KubeletConfigs...)
+	}
 
 	// Set tuning configs
 	if len(config.TuningConfigs) > 0 {
@@ -372,6 +379,9 @@ func convertNodePool(np *cmv1.NodePool) *NodePool {
 			})
 		}
 	}
+
+	// Kubelet configs
+	result.KubeletConfigs = np.KubeletConfigs()
 
 	// Tuning configs
 	result.TuningConfigs = np.TuningConfigs()

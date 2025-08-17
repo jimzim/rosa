@@ -15,10 +15,12 @@ import (
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/iam"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/idp"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/instance"
+	"github.com/openshift/rosa-hcp/cmd/rosa/commands/kubeletconfig"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/network"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/nodepool"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/oidc"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/region"
+	"github.com/openshift/rosa-hcp/cmd/rosa/commands/tuningconfig"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/version"
 	"github.com/openshift/rosa-hcp/internal/config"
 	adminSvc "github.com/openshift/rosa-hcp/pkg/admin"
@@ -28,10 +30,12 @@ import (
 	iamSvc "github.com/openshift/rosa-hcp/pkg/iam"
 	idpSvc "github.com/openshift/rosa-hcp/pkg/idp"
 	instanceSvc "github.com/openshift/rosa-hcp/pkg/instance"
+	kubeletconfigSvc "github.com/openshift/rosa-hcp/pkg/kubeletconfig"
 	networkSvc "github.com/openshift/rosa-hcp/pkg/network"
 	nodepoolSvc "github.com/openshift/rosa-hcp/pkg/nodepool"
 	oidcSvc "github.com/openshift/rosa-hcp/pkg/oidc"
 	regionSvc "github.com/openshift/rosa-hcp/pkg/region"
+	tuningconfigSvc "github.com/openshift/rosa-hcp/pkg/tuningconfig"
 	versionSvc "github.com/openshift/rosa-hcp/pkg/version"
 )
 
@@ -99,18 +103,20 @@ configuration of ROSA HCP clusters running on AWS infrastructure.`,
 
 // Services holds all service instances
 type Services struct {
-	API         api.Client
-	AWS         aws.Client
-	Cluster     *clusterSvc.Service
-	NodePool    *nodepoolSvc.Service
-	OIDC        *oidcSvc.Service
-	Admin       *adminSvc.Service
-	IDP         *idpSvc.Service
-	Version     *versionSvc.Service
-	IAM         iamSvc.Service
-	Network     networkSvc.Service
-	InstanceSvc instanceSvc.Service
-	RegionSvc   regionSvc.Service
+	API            api.Client
+	AWS            aws.Client
+	Cluster        *clusterSvc.Service
+	NodePool       *nodepoolSvc.Service
+	OIDC           *oidcSvc.Service
+	Admin          *adminSvc.Service
+	IDP            *idpSvc.Service
+	Version        *versionSvc.Service
+	IAM            iamSvc.Service
+	Network        networkSvc.Service
+	InstanceSvc    instanceSvc.Service
+	RegionSvc      regionSvc.Service
+	KubeletConfig  kubeletconfigSvc.Service
+	TuningConfig   tuningconfigSvc.Service
 }
 
 // Instance returns the instance service
@@ -174,20 +180,34 @@ func initializeServices(ctx context.Context, cfg *config.Config, logger *slog.Lo
 		return nil, fmt.Errorf("failed to create Region service: %w", err)
 	}
 
+	// Create KubeletConfig service
+	kubeletConfigService, err := kubeletconfigSvc.NewService(ctx, logger, apiClient.GetConnection())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create KubeletConfig service: %w", err)
+	}
+
+	// Create TuningConfig service
+	tuningConfigService, err := tuningconfigSvc.NewService(ctx, logger, apiClient.GetConnection())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TuningConfig service: %w", err)
+	}
+
 	// Create services
 	return &Services{
-		API:         apiClient,
-		AWS:         awsClient,
-		Cluster:     clusterSvc.NewService(apiClient, awsClient, logger),
-		NodePool:    nodepoolSvc.NewService(apiClient, awsClient, logger),
-		OIDC:        oidcSvc.NewService(apiClient, awsClient, logger),
-		Admin:       adminSvc.NewService(apiClient, logger),
-		IDP:         idpSvc.NewService(apiClient, logger),
-		Version:     versionSvc.NewService(apiClient, logger),
-		IAM:         iamService,
-		Network:     networkService,
-		InstanceSvc: instanceService,
-		RegionSvc:   regionService,
+		API:           apiClient,
+		AWS:           awsClient,
+		Cluster:       clusterSvc.NewService(apiClient, awsClient, logger),
+		NodePool:      nodepoolSvc.NewService(apiClient, awsClient, logger),
+		OIDC:          oidcSvc.NewService(apiClient, awsClient, logger),
+		Admin:         adminSvc.NewService(apiClient, logger),
+		IDP:           idpSvc.NewService(apiClient, logger),
+		Version:       versionSvc.NewService(apiClient, logger),
+		IAM:           iamService,
+		Network:       networkService,
+		InstanceSvc:   instanceService,
+		RegionSvc:     regionService,
+		KubeletConfig: kubeletConfigService,
+		TuningConfig:  tuningConfigService,
 	}, nil
 }
 
@@ -517,6 +537,12 @@ func NewCreateCommand(ctx context.Context, cfg *config.Config, logger *slog.Logg
 	// Add identity provider command
 	cmd.AddCommand(idp.NewCreateCommand(logger))
 
+	// Add KubeletConfig command
+	cmd.AddCommand(kubeletconfig.NewCreateCommand(logger))
+
+	// Add TuningConfig command
+	cmd.AddCommand(tuningconfig.NewCreateCommand(logger))
+
 	return cmd
 }
 
@@ -552,6 +578,12 @@ func NewListCommand(ctx context.Context, cfg *config.Config, logger *slog.Logger
 	// Add regions list command
 	cmd.AddCommand(region.NewListCommand(logger))
 
+	// Add kubeletconfigs list command
+	cmd.AddCommand(kubeletconfig.NewListCommand(logger))
+
+	// Add tuning-configs list command
+	cmd.AddCommand(tuningconfig.NewListCommand(logger))
+
 	return cmd
 }
 
@@ -580,6 +612,12 @@ func NewDeleteCommand(ctx context.Context, cfg *config.Config, logger *slog.Logg
 
 	// Add upgrade cancel command
 	cmd.AddCommand(cluster.NewCancelUpgradeCommand(logger))
+
+	// Add kubeletconfig delete command
+	cmd.AddCommand(kubeletconfig.NewDeleteCommand(logger))
+
+	// Add tuning-config delete command
+	cmd.AddCommand(tuningconfig.NewDeleteCommand(logger))
 
 	return cmd
 }
