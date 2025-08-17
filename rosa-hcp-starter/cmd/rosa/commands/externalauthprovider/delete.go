@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
 
 	"github.com/openshift/rosa-hcp/internal/config"
 	"github.com/openshift/rosa-hcp/pkg/api"
-	"github.com/openshift/rosa-hcp/pkg/externalauthprovider"
+	extAuthSvc "github.com/openshift/rosa-hcp/pkg/externalauthprovider"
 	"github.com/openshift/rosa-hcp/pkg/output"
 )
 
@@ -18,7 +17,7 @@ import (
 type DeleteOptions struct {
 	ClusterName  string
 	ProviderName string
-	Yes          bool
+	Force        bool
 }
 
 // NewDeleteCommand creates the external-auth-provider delete command
@@ -26,31 +25,32 @@ func NewDeleteCommand(logger *slog.Logger) *cobra.Command {
 	opts := &DeleteOptions{}
 
 	cmd := &cobra.Command{
-		Use:   "external-auth-provider PROVIDER_NAME",
-		Short: "Delete an external authentication provider",
-		Long:  "Delete an external authentication provider from a cluster.",
+		Use:     "external-auth-provider",
+		Aliases: []string{"externalauthprovider"},
+		Short:   "Delete an external authentication provider",
+		Long:    "Delete an external authentication provider from a cluster.",
 		Example: `  # Delete an external auth provider
-  rosa delete external-auth-provider my-sso --cluster my-cluster
+  rosa delete external-auth-provider --cluster my-cluster --name my-provider
 
-  # Delete without confirmation prompt
-  rosa delete external-auth-provider my-sso --cluster my-cluster --yes`,
-		Args: cobra.ExactArgs(1),
+  # Force delete without confirmation
+  rosa delete external-auth-provider --cluster my-cluster --name my-provider --yes`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts.ProviderName = args[0]
-			return runDeleteExternalAuth(cmd.Context(), logger, opts)
+			return runDeleteExternalAuthProvider(cmd.Context(), logger, opts)
 		},
 	}
 
 	flags := cmd.Flags()
 	flags.StringVarP(&opts.ClusterName, "cluster", "c", "", "Name or ID of the cluster (required)")
-	flags.BoolVarP(&opts.Yes, "yes", "y", false, "Skip confirmation prompt")
+	flags.StringVar(&opts.ProviderName, "name", "", "Name of the provider to delete (required)")
+	flags.BoolVarP(&opts.Force, "yes", "y", false, "Skip confirmation prompt")
 
 	cmd.MarkFlagRequired("cluster")
+	cmd.MarkFlagRequired("name")
 
 	return cmd
 }
 
-func runDeleteExternalAuth(ctx context.Context, logger *slog.Logger, opts *DeleteOptions) error {
+func runDeleteExternalAuthProvider(ctx context.Context, logger *slog.Logger, opts *DeleteOptions) error {
 	writer := output.NewWriter(output.FormatText)
 
 	// Load config
@@ -68,89 +68,69 @@ func runDeleteExternalAuth(ctx context.Context, logger *slog.Logger, opts *Delet
 		return fmt.Errorf("failed to create API client: %w", err)
 	}
 
-	// Get cluster
+	// Create external auth service
+	extAuthService, err := extAuthSvc.NewService(ctx, logger, apiClient.GetConnection())
+	if err != nil {
+		return fmt.Errorf("failed to create external auth service: %w", err)
+	}
+
+	// Get cluster to verify it exists
 	clusterResp, err := apiClient.GetCluster(ctx, opts.ClusterName)
 	if err != nil {
 		return fmt.Errorf("failed to get cluster: %w", err)
 	}
 	cluster := clusterResp.Body()
 
-	// Create External Auth Provider service
-	authSvc, err := externalauthprovider.NewService(ctx, logger, apiClient.GetConnection())
-	if err != nil {
-		return fmt.Errorf("failed to create external auth service: %w", err)
+	// Check if external auth is enabled
+	if cluster.ExternalAuthConfig() == nil || !cluster.ExternalAuthConfig().Enabled() {
+		writer.Warning("Cluster '%s' does not have external authentication enabled", opts.ClusterName)
+		return nil
 	}
 
-	// Get the provider to show details
-	provider, err := authSvc.Get(ctx, cluster.ID(), opts.ProviderName)
-	if err != nil {
-		return fmt.Errorf("failed to get external auth provider '%s': %w", opts.ProviderName, err)
-	}
-
-	writer.Title("Delete External Authentication Provider")
-	writer.KeyValue(map[string]string{
-		"Cluster":    cluster.Name(),
-		"Provider":   provider.Name,
-		"Issuer URL": provider.IssuerURL,
-		"Client ID":  provider.ClientID,
-	})
-
-	// Check if this is the last provider
-	providers, err := authSvc.List(ctx, cluster.ID())
+	// List providers to verify the one we're deleting exists
+	providers, err := extAuthService.List(ctx, opts.ClusterName)
 	if err != nil {
 		return fmt.Errorf("failed to list external auth providers: %w", err)
 	}
 
-	if len(providers) == 1 {
-		writer.Warning("\n⚠️  WARNING: This is the only external auth provider configured.")
-		writer.Warning("Deleting it will disable external authentication for the cluster.")
-		writer.Warning("Users will need to use break-glass credentials or other IDPs to authenticate.")
+	found := false
+	for _, provider := range providers {
+		if provider.Name == opts.ProviderName {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		writer.Warning("External auth provider '%s' not found on cluster '%s'", opts.ProviderName, opts.ClusterName)
+		return nil
 	}
 
 	// Confirm deletion
-	if !opts.Yes {
-		writer.Warning("\nThis action cannot be undone.")
-
-		var confirm bool
-		err = huh.NewConfirm().
-			Title(fmt.Sprintf("Delete external auth provider '%s'?", provider.Name)).
-			Description("All users authenticating through this provider will lose access").
-			Value(&confirm).
-			Run()
-		if err != nil {
-			return fmt.Errorf("failed to get confirmation: %w", err)
-		}
-		if !confirm {
-			writer.Info("Deletion cancelled")
-			return nil
-		}
+	if !opts.Force {
+		writer.Warning("This will permanently delete external auth provider '%s' from cluster '%s'", 
+			opts.ProviderName, opts.ClusterName)
+		writer.Warning("Users authenticating through this provider will lose access.")
 	}
 
 	// Delete the provider
-	writer.Info("Deleting external auth provider...")
-	err = authSvc.Delete(ctx, cluster.ID(), opts.ProviderName)
+	writer.Info("Deleting external auth provider '%s'...", opts.ProviderName)
+	err = extAuthService.Delete(ctx, opts.ClusterName, opts.ProviderName)
 	if err != nil {
 		return fmt.Errorf("failed to delete external auth provider: %w", err)
 	}
 
-	writer.Success("External auth provider '%s' deleted successfully", opts.ProviderName)
+	writer.Success("Successfully deleted external auth provider '%s' from cluster '%s'", 
+		opts.ProviderName, opts.ClusterName)
 
-	if len(providers) == 1 {
-		writer.Info("\n✓ External authentication has been disabled for this cluster")
-		writer.Info("Users can authenticate using:")
-		writer.Info("  • Break-glass credentials (if configured)")
-		writer.Info("  • Other configured identity providers")
-		writer.Info("  • Cluster admin user (if created)")
-	} else {
+	// Show remaining providers
+	remainingProviders, err := extAuthService.List(ctx, opts.ClusterName)
+	if err == nil && len(remainingProviders) > 0 {
 		writer.Info("\nRemaining external auth providers:")
-		for _, p := range providers {
-			if p.Name != opts.ProviderName {
-				fmt.Printf("  • %s (%s)\n", p.Name, p.IssuerURL)
-			}
+		for _, provider := range remainingProviders {
+			fmt.Printf("  - %s (%s)\n", provider.Name, provider.IssuerURL)
 		}
 	}
-
-	writer.Info("\nThe change may take a few minutes to propagate.")
 
 	return nil
 }

@@ -13,6 +13,7 @@ import (
 type Service interface {
 	Create(ctx context.Context, isHCP bool) (*DNSDomain, error)
 	List(ctx context.Context, hcpOnly bool) ([]*DNSDomain, error)
+	Get(ctx context.Context, domainID string) (*DNSDomain, error)
 	Delete(ctx context.Context, domainID string) error
 }
 
@@ -33,9 +34,11 @@ func NewService(ctx context.Context, logger *slog.Logger, ocm *sdk.Connection) (
 type DNSDomain struct {
 	ID           string
 	ClusterID    string
-	ReservedTime string
+	ReservedAt   string
 	UserDefined  bool
 	Architecture string
+	BaseDomain   string
+	Status       string
 }
 
 // Create creates a new DNS domain
@@ -117,6 +120,24 @@ func (s *service) List(ctx context.Context, hcpOnly bool) ([]*DNSDomain, error) 
 	return domains, nil
 }
 
+// Get retrieves a specific DNS domain
+func (s *service) Get(ctx context.Context, domainID string) (*DNSDomain, error) {
+	s.logger.InfoContext(ctx, "getting DNS domain", slog.String("id", domainID))
+
+	// Get via API
+	response, err := s.ocm.ClustersMgmt().V1().
+		DNSDomains().
+		DNSDomain(domainID).
+		Get().
+		SendContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get DNS domain: %w", err)
+	}
+
+	domain := response.Body()
+	return convertDNSDomain(domain), nil
+}
+
 // Delete deletes a DNS domain
 func (s *service) Delete(ctx context.Context, domainID string) error {
 	s.logger.InfoContext(ctx, "deleting DNS domain", slog.String("domain_id", domainID))
@@ -154,7 +175,19 @@ func convertDNSDomain(domain *cmv1.DNSDomain) *DNSDomain {
 
 	// Set reserved time
 	if domain.ReservedAtTimestamp() != nil && !domain.ReservedAtTimestamp().IsZero() {
-		d.ReservedTime = domain.ReservedAtTimestamp().Format("2006-01-02 15:04:05")
+		d.ReservedAt = domain.ReservedAtTimestamp().Format("2006-01-02 15:04:05")
+	}
+	
+	// Set base domain
+	d.BaseDomain = "openshiftapps.com" // Default for ROSA
+	
+	// Set status - determining from reserved time and cluster
+	if d.ClusterID != "" {
+		d.Status = "in-use"
+	} else if d.ReservedAt != "" {
+		d.Status = "ready"
+	} else {
+		d.Status = "pending"
 	}
 
 	// Set architecture

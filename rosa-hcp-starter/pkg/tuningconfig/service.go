@@ -43,9 +43,11 @@ type Config struct {
 
 // TuningConfig represents a TuningConfig
 type TuningConfig struct {
-	ID   string
-	Name string
-	Spec map[string]interface{}
+	ID        string
+	Name      string
+	Spec      map[string]interface{}
+	CreatedAt string
+	NodePools []string
 }
 
 // TuningSpec represents the structure of a tuning config spec

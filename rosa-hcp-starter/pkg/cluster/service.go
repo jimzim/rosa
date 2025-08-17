@@ -78,7 +78,9 @@ type Cluster struct {
 	ID                        string
 	Name                      string
 	DisplayName               string
+	DomainPrefix              string
 	State                     string
+	StateDescription          string
 	APIURL                    string
 	ConsoleURL                string
 	Region                    string
@@ -90,6 +92,28 @@ type Cluster struct {
 	MaxReplicas               int
 	Private                   bool
 	DisableWorkloadMonitoring bool
+	NetworkType               string
+	ServiceCIDR               string
+	PodCIDR                   string
+	MachineCIDR               string
+	SubnetIDs                 []string
+	ComputeNodes              int
+	ComputeMachineType        string
+	Autoscaling               bool
+	MultiAZ                   bool
+	ProxyURL                  string
+	NoProxy                   string
+	AWS                       *AWSConfig
+}
+
+// AWSConfig contains AWS-specific cluster configuration
+type AWSConfig struct {
+	AccountID        string
+	InstallerRoleARN string
+	SupportRoleARN   string
+	WorkerRoleARN    string
+	OIDCEndpointURL  string
+	AuditLogRoleARN  string
 }
 
 // UpdateOptions contains options for updating a cluster

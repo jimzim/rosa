@@ -42,6 +42,8 @@ type KubeletConfig struct {
 	ID           string
 	Name         string
 	PodPidsLimit int
+	CreatedAt    string
+	NodePools    []string
 }
 
 // Create creates a new KubeletConfig

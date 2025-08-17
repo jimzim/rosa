@@ -716,7 +716,7 @@ func NewDeleteCommand(ctx context.Context, cfg *config.Config, logger *slog.Logg
 
 	// Add external auth provider delete command
 	cmd.AddCommand(externalauthprovider.NewDeleteCommand(logger))
-	
+
 	// Add DNS domain delete command
 	cmd.AddCommand(dnsdomain.NewDeleteCommand(logger))
 
@@ -752,11 +752,21 @@ func NewDescribeCommand(ctx context.Context, cfg *config.Config, logger *slog.Lo
 
 	// Add external auth provider describe command
 	cmd.AddCommand(externalauthprovider.NewDescribeCommand(logger))
-	
+
 	// Add break-glass credential describe command
 	cmd.AddCommand(breakglass.NewDescribeCommand(logger))
-
-	// Add other describe commands that might already exist
+	
+	// Add cluster describe command
+	cmd.AddCommand(cluster.NewDescribeCommand(logger))
+	
+	// Add kubeletconfig describe command
+	cmd.AddCommand(kubeletconfig.NewDescribeCommand(logger))
+	
+	// Add tuning-config describe command
+	cmd.AddCommand(tuningconfig.NewDescribeCommand(logger))
+	
+	// Add DNS domain describe command
+	cmd.AddCommand(dnsdomain.NewDescribeCommand(logger))
 
 	return cmd
 }
@@ -802,7 +812,7 @@ func NewVerifyCommand(ctx context.Context, cfg *config.Config, logger *slog.Logg
 
 	// Add permissions verify command
 	cmd.AddCommand(verify.NewPermissionsCommand(logger))
-	
+
 	// Add quota verify command
 	cmd.AddCommand(verify.NewQuotaCommand(logger))
 
