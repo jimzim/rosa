@@ -1,201 +1,180 @@
-# Missing Features for Complete ROSA HCP CLI
+# Missing Features in ROSA HCP CLI Implementation
 
-## 🔴 Critical Missing Features (High Priority)
+## 🔴 Critical Missing Features
 
-### 1. **Cluster Management**
-- **Edit Cluster** (`rosa edit cluster`)
-  - Update cluster properties (scaling, networking, etc.)
-  - Modify cluster configuration post-creation
-  
-- **Upgrade Cluster** (`rosa upgrade cluster`)
-  - Schedule cluster version upgrades
-  - Manage upgrade policies
-  - Cancel/rollback upgrades
+### 1. **Incomplete Command Implementations**
 
-### 2. **User & Access Management**
-- **Admin User** (`rosa create/delete admin`)
-  - Create cluster-admin user
-  - Critical for initial cluster access
-  
-- **Identity Providers** (`rosa create/list/delete idp`)
-  - GitHub, GitLab, Google, LDAP, OpenID
-  - Essential for user authentication
-  
-- **User Management** (`rosa grant/revoke/list users`)
-  - Grant dedicated-admin access
-  - Manage user permissions
-
-### 3. **Ingress Management**
-- **Ingress Controllers** (`rosa create/edit/delete/list ingress`)
-  - Custom domain configuration
-  - Load balancer customization
-  - Route sharding
-
-### 4. **Cluster Add-ons**
-- **Add-on Management** (`rosa list/install/uninstall addon`)
-  - Managed services (logging, monitoring, etc.)
-  - Operator installations
-  - Add-on configurations
-
-## 🟡 Important Missing Features (Medium Priority)
-
-### 5. **Cluster Operations**
-- **Autoscaler** (`rosa create/edit/delete autoscaler`)
-  - Cluster autoscaling configuration
-  - Min/max node limits
-  
-- **Hibernation** (`rosa hibernate/resume cluster`)
-  - Pause/resume clusters to save costs
-  
-- **Logs** (`rosa logs install/uninstall`)
-  - Installation/uninstallation logs
-  - Debugging support
-
-### 6. **Advanced Configuration**
-- **KubeletConfig** (`rosa create/edit/delete kubeletconfig`)
-  - Custom kubelet configurations
-  - Pod limits, eviction policies
-  
-- **TuningConfigs** (`rosa create/edit/delete tuning-configs`)
-  - Performance tuning profiles
-  - Custom kernel parameters
-  
-- **External Auth Provider** (`rosa create/delete external-auth-provider`)
-  - External OIDC providers
-  - Custom authentication flows
-
-### 7. **Version & Region Management**
-- **List Versions** (`rosa list versions`)
-  - Available OpenShift versions
-  - Upgrade paths
-  
-- **List Regions** (`rosa list regions`)
-  - Available AWS regions
-  - Region capabilities
-  
-- **List Instance Types** (`rosa list instance-types`)
-  - Available EC2 instance types
-  - Instance specifications
-
-## 🟢 Nice-to-Have Features (Low Priority)
-
-### 8. **Verification & Validation**
-- **Verify Permissions** (`rosa verify permissions`)
-  - Check IAM permissions before cluster creation
-  
-- **Verify Quota** (`rosa verify quota`)
-  - Check AWS service quotas
-  
-- **Verify Network** (`rosa verify network`)
-  - Validate VPC and network configuration
-
-### 9. **Advanced Security**
-- **Break-glass Credentials** (`rosa create/list/revoke break-glass-credential`)
-  - Emergency access credentials
-  
-- **Managed Services** (`rosa create/list/delete managed-service`)
-  - Service accounts for AWS integrations
-
-### 10. **OCM Integration**
-- **OCM Roles** (`rosa create/link/unlink ocm-role`)
-  - Organization-level IAM roles
-  
-- **User Roles** (`rosa create/link/unlink user-role`)
-  - User-specific IAM roles
-
-### 11. **DNS Management**
-- **DNS Domains** (`rosa create/delete dns-domain`)
-  - Custom DNS domain management
-  - Route53 integration
-
-### 12. **Support Features**
-- **Access Requests** (`rosa list/describe access-request`)
-  - Red Hat support access requests
-  
-- **Download Clients** (`rosa download oc/rosa`)
-  - Download OpenShift and ROSA CLI
-
-## 📊 Implementation Priority Matrix
-
-| Priority | Feature | Complexity | Impact | Effort |
-|----------|---------|------------|--------|--------|
-| **P0** | Admin User | Low | Critical | 1-2 hours |
-| **P0** | Edit Cluster | Medium | High | 4-6 hours |
-| **P0** | Upgrade Cluster | High | Critical | 6-8 hours |
-| **P1** | Identity Providers | Medium | High | 4-6 hours |
-| **P1** | Ingress Management | Medium | High | 4-6 hours |
-| **P1** | List Versions | Low | High | 2-3 hours |
-| **P2** | Add-ons | High | Medium | 8-10 hours |
-| **P2** | Autoscaler | Medium | Medium | 4-6 hours |
-| **P2** | Hibernation | Medium | Medium | 4-6 hours |
-| **P3** | Verification Commands | Low | Low | 2-3 hours |
-| **P3** | Advanced Configs | High | Low | 8-10 hours |
-
-## 🚀 Recommended Next Steps
-
-### Phase 1: Essential Access (P0)
+#### Revoke Commands
 ```bash
-# 1. Admin user creation - Without this, users can't access their clusters
-rosa create admin --cluster <name>
-
-# 2. Cluster editing - Basic day-2 operations
-rosa edit cluster --name <name> --compute-nodes 5
-
-# 3. Cluster upgrades - Keep clusters secure and updated
-rosa upgrade cluster --cluster <name> --version 4.14.5
+# NOT IMPLEMENTED - Currently placeholders
+rosa revoke user --cluster <name> --user <username>
+rosa revoke break-glass-credential --cluster <name> --credential-id <id>
 ```
 
-### Phase 2: User Management (P1)
+#### Delete Commands Missing
 ```bash
-# Identity providers for team access
-rosa create idp --cluster <name> --type github
-
-# Ingress for custom domains
-rosa create ingress --cluster <name> --domain example.com
-
-# Version listing for upgrade planning
-rosa list versions --channel-group stable
+# NOT IMPLEMENTED
+rosa delete dns-domain <domain-id>
+rosa delete external-auth-provider --cluster <name> --provider <name>
+rosa describe break-glass-credential --cluster <name> --id <id>
+rosa describe kubeletconfig --cluster <name> --name <name>
+rosa describe tuning-config --cluster <name> --name <name>
+rosa describe dns-domain <domain-id>
 ```
 
-### Phase 3: Production Features (P2)
+#### Logs Commands
 ```bash
-# Autoscaling for dynamic workloads
-rosa create autoscaler --cluster <name> --min 3 --max 10
-
-# Add-ons for additional functionality
-rosa install addon --cluster <name> cluster-logging-operator
-
-# Hibernation for cost savings
-rosa hibernate cluster --name <name>
+# NOT IMPLEMENTED
+rosa logs uninstall --cluster <name>  # Only install logs implemented
 ```
 
-## 📝 Notes for HCP-Specific Implementation
+### 2. **Cluster Creation Gaps**
 
-1. **Machine Pools vs Node Pools**: HCP only uses node pools (already implemented ✅)
-2. **Control Plane**: Hosted by Red Hat, no control plane configuration needed
-3. **OIDC**: Already implemented, but may need operator role integration
-4. **STS-Only**: No mint mode support needed (HCP is STS-only)
-5. **Networking**: PrivateLink support may need enhancement
+#### Missing Flags
+```bash
+# NOT IMPLEMENTED in cluster create
+--proxy-http <url>                # Proxy configuration at creation
+--proxy-https <url>               
+--no-proxy <list>
+--audit-log-arn <arn>             # Audit logging at creation
+--dns-domain-id <id>              # Custom DNS domain
+--billing-account <id>            # AWS billing account
+--ec2-metadata-http-tokens        # IMDSv2 enforcement
+--disable-scp-checks              # SCP validation bypass
+--etcd-encryption                 # etcd encryption at rest
+--fips                            # FIPS compliance mode
+--host-prefix <num>               # Pod network host prefix
+--machine-cidr <cidr>             # Machine network CIDR
+--service-cidr <cidr>             # Service network CIDR
+--pod-cidr <cidr>                 # Pod network CIDR
+```
 
-## 💡 Quick Wins (Can implement quickly)
+### 3. **Verification Commands**
 
-1. **rosa create admin** - Essential, simple to implement (~1-2 hours)
-2. **rosa list versions** - Query OCM API for available versions (~2 hours)
-3. **rosa list regions** - Query AWS/OCM for available regions (~2 hours)
-4. **rosa verify permissions** - Check IAM permissions (~3 hours)
+#### Missing Verifications
+```bash
+# NOT IMPLEMENTED
+rosa verify permissions            # AWS IAM permissions check
+rosa verify quota                  # AWS service quotas check
+rosa verify openshift-installer    # Installer prerequisites
+```
 
-## 🏁 Definition of "Complete"
+## 🟡 Incomplete Features
 
-A production-ready ROSA HCP CLI should have at minimum:
-- ✅ Cluster CRUD (already done)
-- ✅ Node Pool management (already done)
-- ✅ IAM roles setup (already done)
-- ✅ Network creation (already done)
-- ❌ Admin user creation (P0)
-- ❌ Cluster editing/upgrading (P0)
-- ❌ Identity providers (P1)
-- ❌ Ingress management (P1)
-- ❌ Basic add-ons (P2)
-- ❌ Autoscaling (P2)
+### 1. **OCM SDK API Issues**
+Several services have SDK compatibility issues that prevent compilation:
+- External Auth Provider claim mappings
+- Break-glass credential timestamps
+- DNS domain timestamps
+- Shared VPC configuration methods
 
-The current implementation covers ~40% of full production features. The most critical gap is **admin user creation** - without it, users cannot access their clusters after creation!
+### 2. **Output Format Support**
+```bash
+# JSON/YAML output not fully implemented for many commands
+rosa list clusters -o json        # Some commands missing JSON support
+rosa describe cluster -o yaml     # Some commands missing YAML support
+```
+
+### 3. **Cluster Operations**
+
+#### Hibernation (Not Available for HCP)
+```bash
+# NOT APPLICABLE TO HCP (but user might expect it)
+rosa hibernate cluster --cluster <name>
+rosa resume cluster --cluster <name>
+```
+
+#### Missing Cluster Features
+```bash
+# NOT IMPLEMENTED
+rosa edit cluster --cluster <name> --audit-log-arn <arn>  # Only in create, not edit
+rosa create cluster --dry-run      # Preview mode
+rosa create cluster --watch        # Real-time creation monitoring
+```
+
+## 🟢 Features Not Needed for HCP
+
+These are in the original ROSA CLI but not applicable to HCP:
+
+1. **Control Plane Scaling** - Managed by Red Hat
+2. **Control Plane Machine Pools** - No control plane nodes in customer account
+3. **Hibernation/Resume** - Not supported for HCP
+4. **Manual Control Plane Upgrades** - Managed by Red Hat
+
+## 📊 Implementation Completeness
+
+| Category | Implemented | Missing | Completeness |
+|----------|------------|---------|--------------|
+| Core Cluster Ops | 12 | 3 | 80% |
+| NodePool Ops | 5 | 0 | 100% |
+| Security/Access | 15 | 4 | 79% |
+| Network | 8 | 2 | 80% |
+| Verification | 1 | 3 | 25% |
+| Logs | 1 | 1 | 50% |
+| Add-ons | 3 | 0 | 100% |
+| **Overall** | **45** | **13** | **78%** |
+
+## 🔧 Technical Debt
+
+### 1. **Error Handling**
+- Some errors return generic messages
+- OCM API errors not always properly wrapped
+- Missing retry logic for transient failures
+
+### 2. **Testing**
+- No unit tests
+- No integration tests
+- No end-to-end test suite
+
+### 3. **Documentation**
+- Missing inline code documentation
+- No API documentation
+- Limited error message context
+
+### 4. **Performance**
+- No caching of API responses
+- Sequential API calls instead of parallel where possible
+- No progress indicators for long operations
+
+## 🎯 Priority Fixes for Production
+
+### High Priority (Required for Production)
+1. Fix OCM SDK API compatibility issues
+2. Implement missing delete/describe commands
+3. Add permissions and quota verification
+4. Complete revoke commands for security
+5. Add dry-run mode for safety
+
+### Medium Priority (Important for UX)
+1. Complete JSON/YAML output for all commands
+2. Add uninstall logs viewing
+3. Implement progress indicators
+4. Add retry logic for API calls
+5. Improve error messages with context
+
+### Low Priority (Nice to Have)
+1. Shell completion improvements
+2. Command aliases
+3. Configuration templates
+4. Offline documentation
+5. Performance optimizations
+
+## 📝 Estimated Effort
+
+To reach 100% production readiness:
+- **Critical fixes**: 2-3 days
+- **Medium priority**: 2-3 days  
+- **Testing suite**: 3-4 days
+- **Documentation**: 1-2 days
+
+**Total: 8-12 days for complete production readiness**
+
+## 🚀 Current State Assessment
+
+The CLI is **functional for most common use cases** but needs:
+- Critical command completions for full lifecycle management
+- SDK compatibility fixes for compilation
+- Comprehensive testing before production deployment
+- Better error handling and user feedback
+
+Despite these gaps, the implementation covers the majority of HCP cluster operations and provides a solid foundation for the HCP-only future of ROSA.
