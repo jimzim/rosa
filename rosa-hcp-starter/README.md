@@ -1,11 +1,17 @@
 # ROSA CLI - HCP Edition 🚀
 
-> **⚠️ IMPORTANT: This CLI supports ROSA HCP (Hosted Control Planes) clusters ONLY**  
-> Classic ROSA clusters are NOT supported in this version.
+> **⚠️ IMPORTANT: This version of the `rosa` CLI supports ROSA HCP (Hosted Control Planes) clusters ONLY**  
+> Classic ROSA clusters are NOT supported. This is a complete rewrite focused exclusively on HCP.
 
-## 📋 Overview
+## 📋 Executive Summary
 
-This is the next-generation ROSA CLI built exclusively for **Hosted Control Planes (HCP)** - the future of Red Hat OpenShift on AWS. HCP provides a more scalable, cost-effective, and manageable approach to running OpenShift clusters with the control plane managed by Red Hat.
+This is a ground-up rewrite of the `rosa` CLI designed exclusively for **Hosted Control Planes (HCP)** - the future of Red Hat OpenShift on AWS. While maintaining the familiar `rosa` command name for consistency, this version drops all Classic cluster support to provide a cleaner, more maintainable codebase optimized for HCP operations.
+
+### Key Points
+- **Command**: Still uses `rosa` (not `rosa-hcp`) for familiarity
+- **Support**: HCP clusters ONLY - Classic clusters are not supported
+- **Architecture**: Complete rewrite with modern Go patterns
+- **Purpose**: Streamlined tool for the HCP-first future of ROSA
 
 ### Why HCP-Only?
 
@@ -14,6 +20,14 @@ This is the next-generation ROSA CLI built exclusively for **Hosted Control Plan
 - **Faster Provisioning**: Clusters ready in ~15 minutes
 - **Better Multi-tenancy**: Shared control plane infrastructure
 - **Enhanced Security**: Isolated control plane with private endpoint options
+
+### Why Still Named `rosa`?
+
+We intentionally kept the `rosa` command name (rather than `rosa-hcp`) for several reasons:
+- **Continuity**: Maintains familiarity for existing ROSA users
+- **Future-proof**: HCP is the future direction for all ROSA clusters
+- **Simplicity**: One command to remember, with clear HCP focus
+- **Migration Path**: Easier transition as Classic clusters are phased out
 
 ## 🎯 Key Features
 
@@ -52,16 +66,16 @@ This is the next-generation ROSA CLI built exclusively for **Hosted Control Plan
 ```bash
 # Clone the repository
 git clone https://github.com/openshift/rosa.git
-cd rosa/rosa-hcp-starter
+cd rosa/rosa-starter
 
 # Build the CLI
 make build
 
 # Install to your PATH
-sudo mv bin/rosa /usr/local/bin/rosa-hcp
+sudo mv bin/rosa /usr/local/bin/rosa
 
 # Verify installation
-rosa-hcp version
+rosa version
 ```
 
 ### Download Pre-built Binary (when available)
@@ -70,12 +84,12 @@ rosa-hcp version
 # macOS
 curl -LO https://github.com/openshift/rosa/releases/download/vX.Y.Z/rosa-hcp-darwin-amd64
 chmod +x rosa-hcp-darwin-amd64
-sudo mv rosa-hcp-darwin-amd64 /usr/local/bin/rosa-hcp
+sudo mv rosa-hcp-darwin-amd64 /usr/local/bin/rosa
 
 # Linux
 curl -LO https://github.com/openshift/rosa/releases/download/vX.Y.Z/rosa-hcp-linux-amd64
 chmod +x rosa-hcp-linux-amd64
-sudo mv rosa-hcp-linux-amd64 /usr/local/bin/rosa-hcp
+sudo mv rosa-hcp-linux-amd64 /usr/local/bin/rosa
 ```
 
 ## 🚀 Quick Start
@@ -84,39 +98,39 @@ sudo mv rosa-hcp-linux-amd64 /usr/local/bin/rosa-hcp
 
 ```bash
 # Login to your Red Hat account
-rosa-hcp login --use-auth-code
+rosa login --use-auth-code
 
 # Verify AWS credentials
 aws sts get-caller-identity
 
 # Initialize your AWS account for ROSA
-rosa-hcp init
+rosa init
 
 # Verify permissions
-rosa-hcp verify permissions
+rosa verify permissions
 ```
 
 ### 2. Create Prerequisites
 
 ```bash
 # Create account-wide IAM roles
-rosa-hcp create account-roles --mode auto --yes
+rosa create account-roles --mode auto --yes
 
 # Create OIDC configuration
-rosa-hcp create oidc-config --mode auto --yes
+rosa create oidc-config --mode auto --yes
 
 # Create a VPC (or use existing)
-rosa-hcp create network --name my-vpc --region us-east-1
+rosa create network --name my-vpc --region us-east-1
 ```
 
 ### 3. Create an HCP Cluster
 
 ```bash
 # Interactive mode (recommended for first time)
-rosa-hcp create cluster --interactive
+rosa create cluster --interactive
 
 # Or with explicit parameters
-rosa-hcp create cluster \
+rosa create cluster \
   --cluster-name my-hcp-cluster \
   --region us-east-1 \
   --subnet-ids subnet-xxx,subnet-yyy,subnet-zzz \
@@ -128,7 +142,7 @@ rosa-hcp create cluster \
 
 ```bash
 # Create a nodepool for your workloads
-rosa-hcp create nodepool \
+rosa create nodepool \
   --cluster my-hcp-cluster \
   --name worker \
   --replicas 3 \
@@ -139,10 +153,10 @@ rosa-hcp create nodepool \
 
 ```bash
 # Create an admin user
-rosa-hcp create admin --cluster my-hcp-cluster
+rosa create admin --cluster my-hcp-cluster
 
 # Get cluster credentials
-rosa-hcp describe cluster --cluster my-hcp-cluster
+rosa describe cluster --cluster my-hcp-cluster
 
 # Configure kubectl
 oc login <api-url> -u cluster-admin -p <password>
@@ -154,64 +168,64 @@ oc login <api-url> -u cluster-admin -p <password>
 
 ```bash
 # List all clusters
-rosa-hcp list clusters
+rosa list clusters
 
 # Describe cluster details
-rosa-hcp describe cluster --cluster my-cluster
+rosa describe cluster --cluster my-cluster
 
 # Edit cluster (scaling, network settings, etc.)
-rosa-hcp edit cluster --cluster my-cluster --min-replicas 3 --max-replicas 10
+rosa edit cluster --cluster my-cluster --min-replicas 3 --max-replicas 10
 
 # Upgrade cluster
-rosa-hcp upgrade cluster --cluster my-cluster --version 4.14.10
+rosa upgrade cluster --cluster my-cluster --version 4.14.10
 
 # Delete cluster
-rosa-hcp delete cluster --cluster my-cluster --yes
+rosa delete cluster --cluster my-cluster --yes
 ```
 
 ### NodePool Management
 
 ```bash
 # List nodepools
-rosa-hcp list nodepools --cluster my-cluster
+rosa list nodepools --cluster my-cluster
 
 # Scale a nodepool
-rosa-hcp edit nodepool --cluster my-cluster --nodepool worker --replicas 5
+rosa edit nodepool --cluster my-cluster --nodepool worker --replicas 5
 
 # Add labels and taints
-rosa-hcp edit nodepool --cluster my-cluster --nodepool worker \
+rosa edit nodepool --cluster my-cluster --nodepool worker \
   --labels workload=frontend \
   --taints key1=value1:NoSchedule
 
 # Delete nodepool
-rosa-hcp delete nodepool --cluster my-cluster --nodepool worker --yes
+rosa delete nodepool --cluster my-cluster --nodepool worker --yes
 ```
 
 ### Security Configuration
 
 ```bash
 # Configure external authentication
-rosa-hcp create external-auth-provider \
+rosa create external-auth-provider \
   --cluster my-cluster \
   --issuer-url https://auth.example.com \
   --client-id my-app \
   --client-secret <secret>
 
 # Create break-glass credentials (emergency access)
-rosa-hcp create break-glass-credential \
+rosa create break-glass-credential \
   --cluster my-cluster \
   --username emergency-admin \
   --expiration 24h
 
 # Set up identity provider
-rosa-hcp create idp \
+rosa create idp \
   --cluster my-cluster \
   --type github \
   --name github-auth \
   --organizations my-org
 
 # Grant user permissions
-rosa-hcp grant user cluster-admin \
+rosa grant user cluster-admin \
   --cluster my-cluster \
   --user alice@example.com
 ```
@@ -220,19 +234,19 @@ rosa-hcp grant user cluster-admin \
 
 ```bash
 # Create custom kubelet configuration
-rosa-hcp create kubeletconfig \
+rosa create kubeletconfig \
   --cluster my-cluster \
   --name high-pods \
   --pod-pids-limit 4096
 
 # Create TuningConfig for performance optimization
-rosa-hcp create tuning-config \
+rosa create tuning-config \
   --cluster my-cluster \
   --name my-tuning \
   --spec-file tuned-config.yaml
 
 # Apply configs to nodepool
-rosa-hcp edit nodepool \
+rosa edit nodepool \
   --cluster my-cluster \
   --nodepool worker \
   --kubelet-configs high-pods \
@@ -243,15 +257,15 @@ rosa-hcp edit nodepool \
 
 ```bash
 # List available add-ons
-rosa-hcp list addons
+rosa list addons
 
 # Install an add-on
-rosa-hcp install addon \
+rosa install addon \
   --cluster my-cluster \
   --addon cluster-logging-operator
 
 # Configure multiple ingresses
-rosa-hcp create ingress \
+rosa create ingress \
   --cluster my-cluster \
   --name apps \
   --lb-type nlb \
@@ -262,16 +276,16 @@ rosa-hcp create ingress \
 
 ```bash
 # View installation logs
-rosa-hcp logs install --cluster my-cluster --watch
+rosa logs install --cluster my-cluster --watch
 
 # Verify network configuration
-rosa-hcp verify network --subnet-ids subnet-xxx,subnet-yyy
+rosa verify network --subnet-ids subnet-xxx,subnet-yyy
 
 # List cluster versions
-rosa-hcp list versions --channel-group stable
+rosa list versions --channel-group stable
 
 # Check cluster status
-rosa-hcp describe cluster --cluster my-cluster
+rosa describe cluster --cluster my-cluster
 ```
 
 ## 🏗️ Architecture
@@ -308,7 +322,7 @@ rosa-hcp describe cluster --cluster my-cluster
 ### Config File Location
 
 ```bash
-~/.rosa-hcp/config.yaml
+~/.rosa/config.yaml
 ```
 
 ### Environment Variables
@@ -332,10 +346,10 @@ export ROSA_OUTPUT=json  # or yaml, text
 
 ```bash
 # Create a profile
-rosa-hcp config set --profile production --region us-east-1
+rosa config set --profile production --region us-east-1
 
 # Use a profile
-rosa-hcp list clusters --profile production
+rosa list clusters --profile production
 ```
 
 ## 🤝 Contributing

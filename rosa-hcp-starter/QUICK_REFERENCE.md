@@ -1,37 +1,38 @@
-# ROSA HCP CLI - Quick Reference 🚀
+# ROSA CLI (HCP Edition) - Quick Reference 🚀
 
-> **Essential commands for ROSA HCP (Hosted Control Planes) clusters**
+> **Essential commands for ROSA HCP (Hosted Control Planes) clusters**  
+> **Note**: This version of `rosa` supports HCP clusters ONLY
 
 ## 🔐 Authentication & Setup
 
 ```bash
 # Login with browser
-rosa-hcp login --use-auth-code
+rosa login --use-auth-code
 
 # Check login status
-rosa-hcp whoami
+rosa whoami
 
 # Initialize AWS account
-rosa-hcp init
+rosa init
 
 # Logout
-rosa-hcp logout
+rosa logout
 ```
 
 ## 🏗️ Prerequisites
 
 ```bash
 # Create account IAM roles
-rosa-hcp create account-roles --mode auto --yes
+rosa create account-roles --mode auto --yes
 
 # Create OIDC configuration  
-rosa-hcp create oidc-config --mode auto --yes
+rosa create oidc-config --mode auto --yes
 
 # List OIDC configs
-rosa-hcp list oidc-config
+rosa list oidc-config
 
 # Create VPC
-rosa-hcp create network --name my-vpc --region us-east-1
+rosa create network --name my-vpc --region us-east-1
 ```
 
 ## 🎯 Cluster Operations
@@ -39,16 +40,16 @@ rosa-hcp create network --name my-vpc --region us-east-1
 ### Create
 ```bash
 # Interactive (recommended)
-rosa-hcp create cluster --interactive
+rosa create cluster --interactive
 
 # Quick create
-rosa-hcp create cluster \
+rosa create cluster \
   --cluster-name my-cluster \
   --subnet-ids subnet-xxx,subnet-yyy,subnet-zzz \
   --sts --mode auto
 
 # Private cluster
-rosa-hcp create cluster \
+rosa create cluster \
   --cluster-name private-cluster \
   --subnet-ids subnet-xxx,subnet-yyy \
   --private \
@@ -58,26 +59,26 @@ rosa-hcp create cluster \
 ### List & Describe
 ```bash
 # List clusters
-rosa-hcp list clusters
+rosa list clusters
 
 # Describe cluster
-rosa-hcp describe cluster -c my-cluster
+rosa describe cluster -c my-cluster
 
 # Get credentials
-rosa-hcp create admin -c my-cluster
+rosa create admin -c my-cluster
 ```
 
 ### Edit
 ```bash
 # Scale cluster
-rosa-hcp edit cluster -c my-cluster \
+rosa edit cluster -c my-cluster \
   --min-replicas 3 --max-replicas 10
 
 # Make private
-rosa-hcp edit cluster -c my-cluster --private
+rosa edit cluster -c my-cluster --private
 
 # Add proxy
-rosa-hcp edit cluster -c my-cluster \
+rosa edit cluster -c my-cluster \
   --http-proxy-url http://proxy:8080 \
   --https-proxy-url https://proxy:8443
 ```
@@ -85,10 +86,10 @@ rosa-hcp edit cluster -c my-cluster \
 ### Upgrade
 ```bash
 # List available versions
-rosa-hcp list versions
+rosa list versions
 
 # Schedule upgrade
-rosa-hcp upgrade cluster -c my-cluster \
+rosa upgrade cluster -c my-cluster \
   --version 4.14.10 \
   --schedule-date 2024-01-20 \
   --schedule-time 03:00
@@ -97,34 +98,34 @@ rosa-hcp upgrade cluster -c my-cluster \
 ### Delete
 ```bash
 # Delete cluster
-rosa-hcp delete cluster -c my-cluster --yes
+rosa delete cluster -c my-cluster --yes
 ```
 
 ## 👥 NodePool Management
 
 ```bash
 # Create nodepool
-rosa-hcp create nodepool -c my-cluster \
+rosa create nodepool -c my-cluster \
   --name workers \
   --replicas 3 \
   --instance-type m5.xlarge
 
 # List nodepools
-rosa-hcp list nodepools -c my-cluster
+rosa list nodepools -c my-cluster
 
 # Scale nodepool
-rosa-hcp edit nodepool -c my-cluster \
+rosa edit nodepool -c my-cluster \
   --nodepool workers \
   --replicas 5
 
 # Add labels and taints
-rosa-hcp edit nodepool -c my-cluster \
+rosa edit nodepool -c my-cluster \
   --nodepool workers \
   --labels env=prod,team=platform \
   --taints dedicated=backend:NoSchedule
 
 # Delete nodepool
-rosa-hcp delete nodepool -c my-cluster \
+rosa delete nodepool -c my-cluster \
   --nodepool workers --yes
 ```
 
@@ -133,22 +134,22 @@ rosa-hcp delete nodepool -c my-cluster \
 ### Admin User
 ```bash
 # Create cluster admin
-rosa-hcp create admin -c my-cluster
+rosa create admin -c my-cluster
 
 # Delete admin
-rosa-hcp delete admin -c my-cluster --yes
+rosa delete admin -c my-cluster --yes
 ```
 
 ### Identity Providers
 ```bash
 # GitHub IDP
-rosa-hcp create idp -c my-cluster \
+rosa create idp -c my-cluster \
   --type github \
   --name github-auth \
   --organizations my-org
 
 # OIDC IDP
-rosa-hcp create idp -c my-cluster \
+rosa create idp -c my-cluster \
   --type openid \
   --name corporate \
   --client-id app \
@@ -156,35 +157,35 @@ rosa-hcp create idp -c my-cluster \
   --issuer-url https://sso.example.com
 
 # List IDPs
-rosa-hcp list idps -c my-cluster
+rosa list idps -c my-cluster
 ```
 
 ### User Management
 ```bash
 # Grant cluster-admin
-rosa-hcp grant user cluster-admin \
+rosa grant user cluster-admin \
   -c my-cluster \
   --user alice@example.com
 
 # Grant dedicated-admin
-rosa-hcp grant user dedicated-admin \
+rosa grant user dedicated-admin \
   -c my-cluster \
   --user bob@example.com
 
 # List users
-rosa-hcp list users -c my-cluster
+rosa list users -c my-cluster
 ```
 
 ### Break-glass Access
 ```bash
 # Create emergency credential
-rosa-hcp create break-glass-credential \
+rosa create break-glass-credential \
   -c my-cluster \
   --username emergency \
   --expiration 24h
 
 # List credentials
-rosa-hcp list break-glass-credentials -c my-cluster
+rosa list break-glass-credentials -c my-cluster
 ```
 
 ## ⚡ Performance Tuning
@@ -192,15 +193,15 @@ rosa-hcp list break-glass-credentials -c my-cluster
 ### KubeletConfig
 ```bash
 # Create kubelet config
-rosa-hcp create kubeletconfig -c my-cluster \
+rosa create kubeletconfig -c my-cluster \
   --name high-pods \
   --pod-pids-limit 4096
 
 # List configs
-rosa-hcp list kubeletconfigs -c my-cluster
+rosa list kubeletconfigs -c my-cluster
 
 # Apply to nodepool
-rosa-hcp edit nodepool -c my-cluster \
+rosa edit nodepool -c my-cluster \
   --nodepool workers \
   --kubelet-configs high-pods
 ```
@@ -208,15 +209,15 @@ rosa-hcp edit nodepool -c my-cluster \
 ### TuningConfig (HCP Exclusive!)
 ```bash
 # Create from file
-rosa-hcp create tuning-config -c my-cluster \
+rosa create tuning-config -c my-cluster \
   --name performance \
   --spec-file tuned.yaml
 
 # Create example file
-rosa-hcp create tuning-config --create-example
+rosa create tuning-config --create-example
 
 # Apply to nodepool
-rosa-hcp edit nodepool -c my-cluster \
+rosa edit nodepool -c my-cluster \
   --nodepool workers \
   --tuning-configs performance
 ```
@@ -226,16 +227,16 @@ rosa-hcp edit nodepool -c my-cluster \
 ### Ingress
 ```bash
 # Create additional ingress
-rosa-hcp create ingress -c my-cluster \
+rosa create ingress -c my-cluster \
   --name apps \
   --lb-type nlb \
   --replicas 2
 
 # List ingresses
-rosa-hcp list ingresses -c my-cluster
+rosa list ingresses -c my-cluster
 
 # Edit ingress
-rosa-hcp edit ingress -c my-cluster \
+rosa edit ingress -c my-cluster \
   --name apps \
   --replicas 3
 ```
@@ -243,41 +244,41 @@ rosa-hcp edit ingress -c my-cluster \
 ### DNS Domains
 ```bash
 # Create DNS domain
-rosa-hcp create dns-domain --hosted-cp
+rosa create dns-domain --hosted-cp
 
 # List domains
-rosa-hcp list dns-domains
+rosa list dns-domains
 
 # Use in cluster creation
-rosa-hcp create cluster \
+rosa create cluster \
   --dns-domain-id <domain-id> ...
 ```
 
 ### Network Verification
 ```bash
 # Verify subnets
-rosa-hcp verify network \
+rosa verify network \
   --subnet-ids subnet-xxx,subnet-yyy
 
 # Verify from cluster
-rosa-hcp verify network -c my-cluster
+rosa verify network -c my-cluster
 ```
 
 ## 📦 Add-ons
 
 ```bash
 # List available add-ons
-rosa-hcp list addons
+rosa list addons
 
 # Install add-on
-rosa-hcp install addon -c my-cluster \
+rosa install addon -c my-cluster \
   --addon cluster-logging-operator
 
 # List installed
-rosa-hcp list addons -c my-cluster --installed
+rosa list addons -c my-cluster --installed
 
 # Uninstall add-on
-rosa-hcp uninstall addon -c my-cluster \
+rosa uninstall addon -c my-cluster \
   --addon cluster-logging-operator --yes
 ```
 
@@ -285,32 +286,32 @@ rosa-hcp uninstall addon -c my-cluster \
 
 ```bash
 # View installation logs
-rosa-hcp logs install -c my-cluster
+rosa logs install -c my-cluster
 
 # Watch logs
-rosa-hcp logs install -c my-cluster --watch
+rosa logs install -c my-cluster --watch
 
 # Tail logs
-rosa-hcp logs install -c my-cluster --tail 100
+rosa logs install -c my-cluster --tail 100
 ```
 
 ## 🔧 Troubleshooting
 
 ```bash
 # Check cluster status
-rosa-hcp describe cluster -c my-cluster
+rosa describe cluster -c my-cluster
 
 # Verify permissions
-rosa-hcp verify permissions
+rosa verify permissions
 
 # List regions
-rosa-hcp list regions
+rosa list regions
 
 # List instance types
-rosa-hcp list instance-types
+rosa list instance-types
 
 # List versions
-rosa-hcp list versions --channel-group stable
+rosa list versions --channel-group stable
 ```
 
 ## 💡 Pro Tips
@@ -318,13 +319,13 @@ rosa-hcp list versions --channel-group stable
 ### Output Formats
 ```bash
 # JSON output
-rosa-hcp list clusters -o json
+rosa list clusters -o json
 
 # YAML output  
-rosa-hcp describe cluster -c my-cluster -o yaml
+rosa describe cluster -c my-cluster -o yaml
 
 # Pipe to jq
-rosa-hcp list clusters -o json | jq '.[] | .name'
+rosa list clusters -o json | jq '.[] | .name'
 ```
 
 ### Environment Variables
@@ -337,14 +338,14 @@ export ROSA_OUTPUT=json          # Default output
 ### Dry Run
 ```bash
 # Preview changes without applying
-rosa-hcp create cluster --dry-run ...
+rosa create cluster --dry-run ...
 ```
 
 ### Interactive Mode
 ```bash
 # Use for complex operations
-rosa-hcp create cluster --interactive
-rosa-hcp create idp --interactive
+rosa create cluster --interactive
+rosa create idp --interactive
 ```
 
 ## 🆘 Common Issues
@@ -353,21 +354,21 @@ rosa-hcp create idp --interactive
 |-------|----------|
 | "AWS field is mandatory" | Provide `--subnet-ids` |
 | "STS is required" | Use `--sts` flag |
-| "No OIDC config" | Run `rosa-hcp create oidc-config` |
+| "No OIDC config" | Run `rosa create oidc-config` |
 | "Subnet not found" | Check VPC and region |
-| "Permission denied" | Run `rosa-hcp verify permissions` |
+| "Permission denied" | Run `rosa verify permissions` |
 
 ## 📚 Help
 
 ```bash
 # General help
-rosa-hcp --help
+rosa --help
 
 # Command help
-rosa-hcp create cluster --help
+rosa create cluster --help
 
 # Subcommand help
-rosa-hcp create --help
+rosa create --help
 ```
 
 ---

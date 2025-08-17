@@ -2,7 +2,7 @@
 
 ## 🚀 Overview
 
-This guide helps you migrate from Classic ROSA clusters to ROSA HCP (Hosted Control Planes). The new HCP-only CLI is designed exclusively for HCP clusters, which represent the future of OpenShift on AWS.
+This guide helps you migrate from Classic ROSA clusters to ROSA HCP (Hosted Control Planes). This new version of the `rosa` CLI is designed exclusively for HCP clusters, which represent the future of OpenShift on AWS. While the command remains `rosa` for familiarity, this version no longer supports Classic clusters.
 
 ## ⚠️ Key Differences
 
@@ -10,7 +10,7 @@ This guide helps you migrate from Classic ROSA clusters to ROSA HCP (Hosted Cont
 
 | Aspect | Classic ROSA | ROSA HCP |
 |--------|-------------|----------|
-| **CLI Support** | `rosa` (supports both) | `rosa-hcp` (HCP only) |
+| **CLI Support** | `rosa` (original version) | `rosa` (HCP-only version) |
 | **Control Plane** | In your AWS account | Red Hat managed |
 | **Minimum Nodes** | 6 (3 control + 3 worker) | 2 (workers only) |
 | **VPC** | Optional (can create) | **Required** (BYOVPC) |
@@ -34,11 +34,11 @@ Before migrating to HCP:
 ### Authentication
 
 ```bash
-# Classic
+# Classic ROSA (original CLI)
 rosa login
 
-# HCP (browser-based with PKCE)
-rosa-hcp login --use-auth-code
+# HCP-only version (this CLI - browser-based with PKCE)
+rosa login --use-auth-code
 ```
 
 ### Cluster Creation
@@ -48,7 +48,7 @@ rosa-hcp login --use-auth-code
 rosa create cluster --cluster-name my-cluster
 
 # HCP (VPC required)
-rosa-hcp create cluster \
+rosa create cluster \
   --cluster-name my-hcp-cluster \
   --subnet-ids subnet-xxx,subnet-yyy,subnet-zzz \
   --sts \
@@ -62,7 +62,7 @@ rosa-hcp create cluster \
 rosa create machinepool --cluster my-cluster --name worker --replicas 3
 
 # HCP (NodePools)
-rosa-hcp create nodepool --cluster my-hcp-cluster --name worker --replicas 3
+rosa create nodepool --cluster my-hcp-cluster --name worker --replicas 3
 ```
 
 ### Scaling
@@ -72,7 +72,7 @@ rosa-hcp create nodepool --cluster my-hcp-cluster --name worker --replicas 3
 rosa edit machinepool --cluster my-cluster --replicas 5
 
 # HCP
-rosa-hcp edit nodepool --cluster my-hcp-cluster --nodepool worker --replicas 5
+rosa edit nodepool --cluster my-hcp-cluster --nodepool worker --replicas 5
 ```
 
 ### Identity Providers
@@ -82,7 +82,7 @@ rosa-hcp edit nodepool --cluster my-hcp-cluster --nodepool worker --replicas 5
 rosa create idp --cluster my-cluster --type github
 
 # HCP (same command, different backend)
-rosa-hcp create idp --cluster my-hcp-cluster --type github
+rosa create idp --cluster my-hcp-cluster --type github
 ```
 
 ## 🚦 Step-by-Step Migration
@@ -91,7 +91,7 @@ rosa-hcp create idp --cluster my-hcp-cluster --type github
 
 ```bash
 # Create VPC if you don't have one
-rosa-hcp create network --name production-vpc --region us-east-1
+rosa create network --name production-vpc --region us-east-1
 
 # Or use existing VPC - get subnet IDs
 aws ec2 describe-subnets --filters "Name=vpc-id,Values=vpc-xxxxx" \
@@ -102,23 +102,23 @@ aws ec2 describe-subnets --filters "Name=vpc-id,Values=vpc-xxxxx" \
 
 ```bash
 # Create account-wide roles
-rosa-hcp create account-roles --mode auto --yes
+rosa create account-roles --mode auto --yes
 
 # Create OIDC provider
-rosa-hcp create oidc-config --mode auto --yes
+rosa create oidc-config --mode auto --yes
 
 # Note the OIDC config ID for cluster creation
-rosa-hcp list oidc-config
+rosa list oidc-config
 ```
 
 ### Step 3: Create HCP Cluster
 
 ```bash
 # Interactive mode (easiest)
-rosa-hcp create cluster --interactive
+rosa create cluster --interactive
 
 # Or specify all parameters
-rosa-hcp create cluster \
+rosa create cluster \
   --cluster-name production-hcp \
   --region us-east-1 \
   --version 4.14.latest \
@@ -135,7 +135,7 @@ rosa-hcp create cluster \
 # Default nodepool is created automatically
 # Add additional nodepools as needed
 
-rosa-hcp create nodepool \
+rosa create nodepool \
   --cluster production-hcp \
   --name gpu-workers \
   --instance-type p3.2xlarge \
@@ -148,10 +148,10 @@ rosa-hcp create nodepool \
 
 ```bash
 # Create admin user
-rosa-hcp create admin --cluster production-hcp
+rosa create admin --cluster production-hcp
 
 # Or set up IdP
-rosa-hcp create idp \
+rosa create idp \
   --cluster production-hcp \
   --type openid \
   --name corporate-sso \
@@ -180,12 +180,12 @@ oc apply -f classic-resources.yaml
 
 ```bash
 # Not available in Classic!
-rosa-hcp create tuning-config \
+rosa create tuning-config \
   --cluster my-hcp \
   --name performance \
   --spec-file tuned.yaml
 
-rosa-hcp edit nodepool \
+rosa edit nodepool \
   --cluster my-hcp \
   --nodepool worker \
   --tuning-configs performance
@@ -195,7 +195,7 @@ rosa-hcp edit nodepool \
 
 ```bash
 # Emergency access (HCP-optimized)
-rosa-hcp create break-glass-credential \
+rosa create break-glass-credential \
   --cluster my-hcp \
   --username emergency \
   --expiration 24h
@@ -205,7 +205,7 @@ rosa-hcp create break-glass-credential \
 
 ```bash
 # Enhanced in HCP
-rosa-hcp create external-auth-provider \
+rosa create external-auth-provider \
   --cluster my-hcp \
   --issuer-url https://auth.example.com \
   --client-id my-app
@@ -217,15 +217,15 @@ rosa-hcp create external-auth-provider \
 **Solution**: HCP requires VPC/subnets. Provide `--subnet-ids`.
 
 ```bash
-rosa-hcp create cluster --subnet-ids subnet-xxx,subnet-yyy,subnet-zzz ...
+rosa create cluster --subnet-ids subnet-xxx,subnet-yyy,subnet-zzz ...
 ```
 
 ### Issue: "STS is required for HCP clusters"
 **Solution**: Always use `--sts` flag and ensure roles exist.
 
 ```bash
-rosa-hcp create account-roles --mode auto
-rosa-hcp create cluster --sts ...
+rosa create account-roles --mode auto
+rosa create cluster --sts ...
 ```
 
 ### Issue: "Cannot access control plane nodes"
@@ -242,8 +242,8 @@ oc debug node/<worker-node>
 
 ```bash
 # Replace 'machinepool' with 'nodepool'
-rosa-hcp create nodepool ...
-rosa-hcp list nodepools ...
+rosa create nodepool ...
+rosa list nodepools ...
 ```
 
 ## 📊 Feature Comparison
@@ -277,33 +277,33 @@ rosa-hcp list nodepools ...
 
 1. **Use Interactive Mode**: For first-time setup
    ```bash
-   rosa-hcp create cluster --interactive
+   rosa create cluster --interactive
    ```
 
 2. **Prepare VPC First**: HCP requires existing VPC
    ```bash
-   rosa-hcp create network --name my-vpc
+   rosa create network --name my-vpc
    ```
 
 3. **Use NodePools**: More flexible than classic machine pools
    ```bash
-   rosa-hcp create nodepool --auto-scaling --min 2 --max 10
+   rosa create nodepool --auto-scaling --min 2 --max 10
    ```
 
 4. **Enable Monitoring**: From the start
    ```bash
-   rosa-hcp create cluster --disable-workload-monitoring=false
+   rosa create cluster --disable-workload-monitoring=false
    ```
 
 5. **Set Up IDPs Early**: Before granting access
    ```bash
-   rosa-hcp create idp --type github --organizations my-org
+   rosa create idp --type github --organizations my-org
    ```
 
 ## 📚 Resources
 
 - [ROSA HCP Documentation](https://docs.openshift.com/rosa/rosa_hcp)
-- [HCP Architecture Guide](https://docs.openshift.com/rosa/rosa_architecture/rosa-hcp-architecture)
+- [HCP Architecture Guide](https://docs.openshift.com/rosa/rosa_architecture/rosa-architecture)
 - [AWS VPC Best Practices](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-best-practices.html)
 - [STS Setup Guide](https://docs.openshift.com/rosa/rosa_install_access_delete_clusters/rosa-sts-creating-a-cluster-quickly)
 

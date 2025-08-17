@@ -37,7 +37,6 @@ import (
 	"github.com/openshift/rosa-hcp/pkg/aws"
 	breakglassSvc "github.com/openshift/rosa-hcp/pkg/breakglass"
 	clusterSvc "github.com/openshift/rosa-hcp/pkg/cluster"
-	dnsdomainSvc "github.com/openshift/rosa-hcp/pkg/dnsdomain"
 	extAuthSvc "github.com/openshift/rosa-hcp/pkg/externalauthprovider"
 	iamSvc "github.com/openshift/rosa-hcp/pkg/iam"
 	idpSvc "github.com/openshift/rosa-hcp/pkg/idp"
@@ -614,7 +613,7 @@ func NewCreateCommand(ctx context.Context, cfg *config.Config, logger *slog.Logg
 
 	// Add break-glass credential create command
 	cmd.AddCommand(breakglass.NewCreateCommand(logger))
-	
+
 	// Add DNS domain create command
 	cmd.AddCommand(dnsdomain.NewCreateCommand(logger))
 
@@ -673,7 +672,7 @@ func NewListCommand(ctx context.Context, cfg *config.Config, logger *slog.Logger
 
 	// Add users list command
 	cmd.AddCommand(user.NewListCommand(logger))
-	
+
 	// Add DNS domains list command
 	cmd.AddCommand(dnsdomain.NewListCommand(logger))
 
