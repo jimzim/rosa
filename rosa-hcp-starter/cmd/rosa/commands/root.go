@@ -14,9 +14,11 @@ import (
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/cluster"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/iam"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/idp"
+	"github.com/openshift/rosa-hcp/cmd/rosa/commands/instance"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/network"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/nodepool"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/oidc"
+	"github.com/openshift/rosa-hcp/cmd/rosa/commands/region"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/version"
 	"github.com/openshift/rosa-hcp/internal/config"
 	adminSvc "github.com/openshift/rosa-hcp/pkg/admin"
@@ -25,9 +27,11 @@ import (
 	clusterSvc "github.com/openshift/rosa-hcp/pkg/cluster"
 	iamSvc "github.com/openshift/rosa-hcp/pkg/iam"
 	idpSvc "github.com/openshift/rosa-hcp/pkg/idp"
+	instanceSvc "github.com/openshift/rosa-hcp/pkg/instance"
 	networkSvc "github.com/openshift/rosa-hcp/pkg/network"
 	nodepoolSvc "github.com/openshift/rosa-hcp/pkg/nodepool"
 	oidcSvc "github.com/openshift/rosa-hcp/pkg/oidc"
+	regionSvc "github.com/openshift/rosa-hcp/pkg/region"
 	versionSvc "github.com/openshift/rosa-hcp/pkg/version"
 )
 
@@ -95,16 +99,28 @@ configuration of ROSA HCP clusters running on AWS infrastructure.`,
 
 // Services holds all service instances
 type Services struct {
-	API      api.Client
-	AWS      aws.Client
-	Cluster  *clusterSvc.Service
-	NodePool *nodepoolSvc.Service
-	OIDC     *oidcSvc.Service
-	Admin    *adminSvc.Service
-	IDP      *idpSvc.Service
-	Version  *versionSvc.Service
-	IAM      iamSvc.Service
-	Network  networkSvc.Service
+	API         api.Client
+	AWS         aws.Client
+	Cluster     *clusterSvc.Service
+	NodePool    *nodepoolSvc.Service
+	OIDC        *oidcSvc.Service
+	Admin       *adminSvc.Service
+	IDP         *idpSvc.Service
+	Version     *versionSvc.Service
+	IAM         iamSvc.Service
+	Network     networkSvc.Service
+	InstanceSvc instanceSvc.Service
+	RegionSvc   regionSvc.Service
+}
+
+// Instance returns the instance service
+func (s *Services) Instance() instanceSvc.Service {
+	return s.InstanceSvc
+}
+
+// Region returns the region service
+func (s *Services) Region() regionSvc.Service {
+	return s.RegionSvc
 }
 
 // initializeServices creates all service instances with proper dependencies
@@ -146,18 +162,32 @@ func initializeServices(ctx context.Context, cfg *config.Config, logger *slog.Lo
 		return nil, fmt.Errorf("failed to create Network service: %w", err)
 	}
 
+	// Create Instance service
+	instanceService, err := instanceSvc.NewService(ctx, logger, apiClient.GetConnection())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Instance service: %w", err)
+	}
+
+	// Create Region service
+	regionService, err := regionSvc.NewService(ctx, logger, apiClient.GetConnection())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Region service: %w", err)
+	}
+
 	// Create services
 	return &Services{
-		API:      apiClient,
-		AWS:      awsClient,
-		Cluster:  clusterSvc.NewService(apiClient, awsClient, logger),
-		NodePool: nodepoolSvc.NewService(apiClient, awsClient, logger),
-		OIDC:     oidcSvc.NewService(apiClient, awsClient, logger),
-		Admin:    adminSvc.NewService(apiClient, logger),
-		IDP:      idpSvc.NewService(apiClient, logger),
-		Version:  versionSvc.NewService(apiClient, logger),
-		IAM:      iamService,
-		Network:  networkService,
+		API:         apiClient,
+		AWS:         awsClient,
+		Cluster:     clusterSvc.NewService(apiClient, awsClient, logger),
+		NodePool:    nodepoolSvc.NewService(apiClient, awsClient, logger),
+		OIDC:        oidcSvc.NewService(apiClient, awsClient, logger),
+		Admin:       adminSvc.NewService(apiClient, logger),
+		IDP:         idpSvc.NewService(apiClient, logger),
+		Version:     versionSvc.NewService(apiClient, logger),
+		IAM:         iamService,
+		Network:     networkService,
+		InstanceSvc: instanceService,
+		RegionSvc:   regionService,
 	}, nil
 }
 
@@ -515,6 +545,12 @@ func NewListCommand(ctx context.Context, cfg *config.Config, logger *slog.Logger
 
 	// Add upgrades list command
 	cmd.AddCommand(version.NewUpgradePathsCommand(logger))
+
+	// Add instance types list command
+	cmd.AddCommand(instance.NewListCommand(logger))
+
+	// Add regions list command
+	cmd.AddCommand(region.NewListCommand(logger))
 
 	return cmd
 }
