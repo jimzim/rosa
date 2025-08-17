@@ -12,7 +12,9 @@ import (
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/addon"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/admin"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/auth"
+	"github.com/openshift/rosa-hcp/cmd/rosa/commands/breakglass"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/cluster"
+	"github.com/openshift/rosa-hcp/cmd/rosa/commands/externalauthprovider"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/iam"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/idp"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/ingress"
@@ -23,13 +25,17 @@ import (
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/oidc"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/region"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/tuningconfig"
+	"github.com/openshift/rosa-hcp/cmd/rosa/commands/user"
+	"github.com/openshift/rosa-hcp/cmd/rosa/commands/verify"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/version"
 	"github.com/openshift/rosa-hcp/internal/config"
 	addonSvc "github.com/openshift/rosa-hcp/pkg/addon"
 	adminSvc "github.com/openshift/rosa-hcp/pkg/admin"
 	"github.com/openshift/rosa-hcp/pkg/api"
 	"github.com/openshift/rosa-hcp/pkg/aws"
+	breakglassSvc "github.com/openshift/rosa-hcp/pkg/breakglass"
 	clusterSvc "github.com/openshift/rosa-hcp/pkg/cluster"
+	extAuthSvc "github.com/openshift/rosa-hcp/pkg/externalauthprovider"
 	iamSvc "github.com/openshift/rosa-hcp/pkg/iam"
 	idpSvc "github.com/openshift/rosa-hcp/pkg/idp"
 	ingressSvc "github.com/openshift/rosa-hcp/pkg/ingress"
@@ -40,6 +46,7 @@ import (
 	oidcSvc "github.com/openshift/rosa-hcp/pkg/oidc"
 	regionSvc "github.com/openshift/rosa-hcp/pkg/region"
 	tuningconfigSvc "github.com/openshift/rosa-hcp/pkg/tuningconfig"
+	userSvc "github.com/openshift/rosa-hcp/pkg/user"
 	versionSvc "github.com/openshift/rosa-hcp/pkg/version"
 )
 
@@ -100,6 +107,9 @@ configuration of ROSA HCP clusters running on AWS infrastructure.`,
 		NewDescribeCommand(ctx, cfg, logger, globalOpts),
 		NewInstallCommand(ctx, cfg, logger, globalOpts),
 		NewUninstallCommand(ctx, cfg, logger, globalOpts),
+		NewVerifyCommand(ctx, cfg, logger, globalOpts),
+		NewGrantCommand(ctx, cfg, logger, globalOpts),
+		NewRevokeCommand(ctx, cfg, logger, globalOpts),
 		auth.NewLoginCommand(),
 		auth.NewWhoAmICommand(),
 		NewCompletionCommand(),
@@ -127,6 +137,9 @@ type Services struct {
 	TuningConfig  tuningconfigSvc.Service
 	Ingress       ingressSvc.Service
 	Addon         addonSvc.Service
+	ExternalAuth  extAuthSvc.Service
+	BreakGlass    breakglassSvc.Service
+	User          userSvc.Service
 }
 
 // Instance returns the instance service
@@ -214,6 +227,24 @@ func initializeServices(ctx context.Context, cfg *config.Config, logger *slog.Lo
 		return nil, fmt.Errorf("failed to create Addon service: %w", err)
 	}
 
+	// Create ExternalAuth service
+	externalAuthService, err := extAuthSvc.NewService(ctx, logger, apiClient.GetConnection())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ExternalAuth service: %w", err)
+	}
+
+	// Create BreakGlass service
+	breakGlassService, err := breakglassSvc.NewService(ctx, logger, apiClient.GetConnection())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create BreakGlass service: %w", err)
+	}
+
+	// Create User service
+	userService, err := userSvc.NewService(ctx, logger, apiClient.GetConnection())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create User service: %w", err)
+	}
+
 	// Create services
 	return &Services{
 		API:           apiClient,
@@ -232,6 +263,9 @@ func initializeServices(ctx context.Context, cfg *config.Config, logger *slog.Lo
 		TuningConfig:  tuningConfigService,
 		Ingress:       ingressService,
 		Addon:         addonService,
+		ExternalAuth:  externalAuthService,
+		BreakGlass:    breakGlassService,
+		User:          userService,
 	}, nil
 }
 
@@ -570,6 +604,12 @@ func NewCreateCommand(ctx context.Context, cfg *config.Config, logger *slog.Logg
 	// Add Ingress command
 	cmd.AddCommand(ingress.NewCreateCommand(logger))
 
+	// Add external auth provider create command
+	cmd.AddCommand(externalauthprovider.NewCreateCommand(logger))
+
+	// Add break-glass credential create command
+	cmd.AddCommand(breakglass.NewCreateCommand(logger))
+
 	return cmd
 }
 
@@ -617,6 +657,15 @@ func NewListCommand(ctx context.Context, cfg *config.Config, logger *slog.Logger
 	// Add addons list command
 	cmd.AddCommand(addon.NewListCommand(logger))
 
+	// Add external auth providers list command
+	cmd.AddCommand(externalauthprovider.NewListCommand(logger))
+
+	// Add break-glass credentials list command
+	cmd.AddCommand(breakglass.NewListCommand(logger))
+
+	// Add users list command
+	cmd.AddCommand(user.NewListCommand(logger))
+
 	return cmd
 }
 
@@ -655,6 +704,9 @@ func NewDeleteCommand(ctx context.Context, cfg *config.Config, logger *slog.Logg
 	// Add ingress delete command
 	cmd.AddCommand(ingress.NewDeleteCommand(logger))
 
+	// Add external auth provider delete command
+	cmd.AddCommand(externalauthprovider.NewDeleteCommand(logger))
+
 	return cmd
 }
 
@@ -685,6 +737,9 @@ func NewDescribeCommand(ctx context.Context, cfg *config.Config, logger *slog.Lo
 	// Add ingress describe command
 	cmd.AddCommand(ingress.NewDescribeCommand(logger))
 
+	// Add external auth provider describe command
+	cmd.AddCommand(externalauthprovider.NewDescribeCommand(logger))
+
 	// Add other describe commands that might already exist
 
 	return cmd
@@ -714,6 +769,53 @@ func NewUninstallCommand(ctx context.Context, cfg *config.Config, logger *slog.L
 
 	// Add addon uninstall command
 	cmd.AddCommand(addon.NewUninstallCommand(logger))
+
+	return cmd
+}
+
+// NewVerifyCommand creates the verify command with subcommands
+func NewVerifyCommand(ctx context.Context, cfg *config.Config, logger *slog.Logger, opts *GlobalOptions) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "verify",
+		Short: "Verify resources are configured correctly",
+		Long:  "Verify resources are configured correctly for ROSA HCP cluster installation.",
+	}
+
+	// Add network verify command
+	cmd.AddCommand(verify.NewNetworkCommand(logger))
+
+	// Add other verify commands as needed (permissions, quota, etc)
+
+	return cmd
+}
+
+// NewGrantCommand creates the grant command with subcommands
+func NewGrantCommand(ctx context.Context, cfg *config.Config, logger *slog.Logger, opts *GlobalOptions) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "grant",
+		Short: "Grant permissions to users",
+		Long:  "Grant roles and permissions to users on ROSA HCP clusters.",
+	}
+
+	// Add grant user command
+	cmd.AddCommand(user.NewGrantCommand(logger))
+
+	return cmd
+}
+
+// NewRevokeCommand creates the revoke command with subcommands
+func NewRevokeCommand(ctx context.Context, cfg *config.Config, logger *slog.Logger, opts *GlobalOptions) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "revoke",
+		Short: "Revoke permissions and credentials",
+		Long:  "Revoke roles, permissions, and emergency credentials from ROSA HCP clusters.",
+	}
+
+	// Add revoke user command (placeholder - you can create a revoke command in the user package)
+	// cmd.AddCommand(user.NewRevokeCommand(logger))
+
+	// Add revoke break-glass credentials command (placeholder)
+	// cmd.AddCommand(breakglass.NewRevokeCommand(logger))
 
 	return cmd
 }
