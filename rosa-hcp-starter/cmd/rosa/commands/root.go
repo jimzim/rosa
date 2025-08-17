@@ -14,12 +14,14 @@ import (
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/auth"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/breakglass"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/cluster"
+	"github.com/openshift/rosa-hcp/cmd/rosa/commands/dnsdomain"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/externalauthprovider"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/iam"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/idp"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/ingress"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/instance"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/kubeletconfig"
+	"github.com/openshift/rosa-hcp/cmd/rosa/commands/logs"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/network"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/nodepool"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/oidc"
@@ -35,6 +37,7 @@ import (
 	"github.com/openshift/rosa-hcp/pkg/aws"
 	breakglassSvc "github.com/openshift/rosa-hcp/pkg/breakglass"
 	clusterSvc "github.com/openshift/rosa-hcp/pkg/cluster"
+	dnsdomainSvc "github.com/openshift/rosa-hcp/pkg/dnsdomain"
 	extAuthSvc "github.com/openshift/rosa-hcp/pkg/externalauthprovider"
 	iamSvc "github.com/openshift/rosa-hcp/pkg/iam"
 	idpSvc "github.com/openshift/rosa-hcp/pkg/idp"
@@ -105,8 +108,10 @@ configuration of ROSA HCP clusters running on AWS infrastructure.`,
 		NewDeleteCommand(ctx, cfg, logger, globalOpts),
 		NewEditCommand(ctx, cfg, logger, globalOpts),
 		NewDescribeCommand(ctx, cfg, logger, globalOpts),
+		NewUpgradeCommand(ctx, cfg, logger, globalOpts),
 		NewInstallCommand(ctx, cfg, logger, globalOpts),
 		NewUninstallCommand(ctx, cfg, logger, globalOpts),
+		NewLogsCommand(ctx, cfg, logger, globalOpts),
 		NewVerifyCommand(ctx, cfg, logger, globalOpts),
 		NewGrantCommand(ctx, cfg, logger, globalOpts),
 		NewRevokeCommand(ctx, cfg, logger, globalOpts),
@@ -609,6 +614,9 @@ func NewCreateCommand(ctx context.Context, cfg *config.Config, logger *slog.Logg
 
 	// Add break-glass credential create command
 	cmd.AddCommand(breakglass.NewCreateCommand(logger))
+	
+	// Add DNS domain create command
+	cmd.AddCommand(dnsdomain.NewCreateCommand(logger))
 
 	return cmd
 }
@@ -665,6 +673,9 @@ func NewListCommand(ctx context.Context, cfg *config.Config, logger *slog.Logger
 
 	// Add users list command
 	cmd.AddCommand(user.NewListCommand(logger))
+	
+	// Add DNS domains list command
+	cmd.AddCommand(dnsdomain.NewListCommand(logger))
 
 	return cmd
 }
@@ -816,6 +827,37 @@ func NewRevokeCommand(ctx context.Context, cfg *config.Config, logger *slog.Logg
 
 	// Add revoke break-glass credentials command (placeholder)
 	// cmd.AddCommand(breakglass.NewRevokeCommand(logger))
+
+	return cmd
+}
+
+// NewUpgradeCommand creates the upgrade command with subcommands
+func NewUpgradeCommand(ctx context.Context, cfg *config.Config, logger *slog.Logger, opts *GlobalOptions) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "upgrade",
+		Short: "Upgrade clusters and components",
+		Long:  "Upgrade ROSA HCP clusters and their components to newer versions.",
+	}
+
+	// Add cluster upgrade command
+	cmd.AddCommand(cluster.NewUpgradeCommand(logger))
+
+	return cmd
+}
+
+// NewLogsCommand creates the logs command with subcommands
+func NewLogsCommand(ctx context.Context, cfg *config.Config, logger *slog.Logger, opts *GlobalOptions) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "logs",
+		Short: "View cluster logs",
+		Long:  "View installation, uninstallation, and audit logs for ROSA HCP clusters.",
+	}
+
+	// Add install logs command
+	cmd.AddCommand(logs.NewInstallCommand(logger))
+
+	// Add uninstall logs command (placeholder - similar to install)
+	// cmd.AddCommand(logs.NewUninstallCommand(logger))
 
 	return cmd
 }

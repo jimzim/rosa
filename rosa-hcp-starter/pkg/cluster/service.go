@@ -51,6 +51,14 @@ type CreateConfig struct {
 	HostPrefix  int
 	Private     bool
 	PrivateLink bool
+	
+	// Additional Security Groups
+	AdditionalSecurityGroupIDs []string
+	
+	// Shared VPC Configuration (HCP-specific)
+	SharedVPCRoleARN          string
+	PrivateHostedZoneID       string
+	PrivateHostedZoneRoleARN  string
 
 	// Compute Configuration
 	ComputeNodes int
@@ -94,7 +102,10 @@ type UpdateOptions struct {
 	MaxReplicas               *int
 	Private                   *bool
 	ProxyURL                  string
+	HTTPProxy                 string
+	HTTPSProxy                string
 	NoProxy                   string
+	AuditLogRoleARN           string
 	DisableWorkloadMonitoring *bool
 }
 
@@ -178,6 +189,28 @@ func (s *Service) Create(ctx context.Context, config CreateConfig) errors.Result
 	// Add billing account if provided
 	if config.BillingAccount != "" {
 		awsBuilder.BillingAccountID(config.BillingAccount)
+	}
+	
+	// Add additional security groups
+	if len(config.AdditionalSecurityGroupIDs) > 0 {
+		awsBuilder.AdditionalComputeSecurityGroupIds(config.AdditionalSecurityGroupIDs...)
+	}
+	
+	// Configure shared VPC (HCP-specific)
+	if config.SharedVPCRoleARN != "" {
+		sharedVPC := cmv1.NewSharedVPC()
+		sharedVPC.RoleArn(config.SharedVPCRoleARN)
+		awsBuilder.SharedVPC(sharedVPC)
+	}
+	
+	// Configure private hosted zone
+	if config.PrivateHostedZoneID != "" {
+		privateHostedZone := cmv1.NewPrivateHostedZone()
+		privateHostedZone.ID(config.PrivateHostedZoneID)
+		if config.PrivateHostedZoneRoleARN != "" {
+			privateHostedZone.RoleArn(config.PrivateHostedZoneRoleARN)
+		}
+		awsBuilder.PrivateHostedZoneID(config.PrivateHostedZoneID)
 	}
 
 	// Note: Availability zones are typically derived from subnet IDs
@@ -331,11 +364,8 @@ func (s *Service) Update(ctx context.Context, opts UpdateOptions) error {
 
 	// Apply changes - Note: DisplayName and Labels might not be supported for updates in HCP
 	// We'll keep the structure but these may be no-ops
-
-	if len(opts.Tags) > 0 {
-		awsBuilder := cmv1.NewAWS().Tags(opts.Tags)
-		builder.AWS(awsBuilder)
-	}
+	
+	// AWS configuration will be built later to include tags and/or audit log
 
 	// Note: Autoscaler configuration might need to be done via separate API
 	// For now, we'll skip autoscaler updates as they may not be supported on cluster patch
@@ -350,15 +380,46 @@ func (s *Service) Update(ctx context.Context, opts UpdateOptions) error {
 		builder.API(apiBuilder)
 	}
 
-	if opts.ProxyURL != "" || opts.NoProxy != "" {
+	// Handle proxy configuration
+	if opts.ProxyURL != "" || opts.HTTPProxy != "" || opts.HTTPSProxy != "" || opts.NoProxy != "" {
 		proxyBuilder := cmv1.NewProxy()
-		if opts.ProxyURL != "" {
-			proxyBuilder.HTTPProxy(opts.ProxyURL).HTTPSProxy(opts.ProxyURL)
+		
+		// Use specific proxy settings if provided, otherwise fall back to ProxyURL
+		httpProxy := opts.HTTPProxy
+		if httpProxy == "" && opts.ProxyURL != "" {
+			httpProxy = opts.ProxyURL
+		}
+		httpsProxy := opts.HTTPSProxy
+		if httpsProxy == "" && opts.ProxyURL != "" {
+			httpsProxy = opts.ProxyURL
+		}
+		
+		if httpProxy != "" {
+			proxyBuilder.HTTPProxy(httpProxy)
+		}
+		if httpsProxy != "" {
+			proxyBuilder.HTTPSProxy(httpsProxy)
 		}
 		if opts.NoProxy != "" {
 			proxyBuilder.NoProxy(opts.NoProxy)
 		}
 		builder.Proxy(proxyBuilder)
+	}
+	
+	// Handle audit log forwarding
+	if opts.AuditLogRoleARN != "" {
+		// Note: This might need to be done through AWS configuration
+		// For HCP clusters, audit log forwarding is typically configured via AWS settings
+		awsBuilder := cmv1.NewAWS()
+		if len(opts.Tags) > 0 {
+			awsBuilder.Tags(opts.Tags)
+		}
+		awsBuilder.AuditLog(cmv1.NewAuditLog().RoleArn(opts.AuditLogRoleARN))
+		builder.AWS(awsBuilder)
+	} else if len(opts.Tags) > 0 {
+		// If we only have tags without audit log
+		awsBuilder := cmv1.NewAWS().Tags(opts.Tags)
+		builder.AWS(awsBuilder)
 	}
 
 	if opts.DisableWorkloadMonitoring != nil {

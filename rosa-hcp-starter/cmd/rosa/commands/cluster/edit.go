@@ -27,6 +27,13 @@ type EditOptions struct {
 	Private  *bool
 	ProxyURL string
 	NoProxy  string
+	
+	// Proxy configuration (separate fields)
+	HTTPProxy  string
+	HTTPSProxy string
+	
+	// Audit log forwarding
+	AuditLogRoleARN string
 
 	// Display options
 	DisplayName string
@@ -105,8 +112,13 @@ This command allows you to modify various cluster settings such as:
 
 	// Network flags
 	flags.BoolVar(&private, "private", false, "Restrict API endpoint to private access")
-	flags.StringVar(&opts.ProxyURL, "http-proxy", "", "HTTP proxy URL")
+	flags.StringVar(&opts.ProxyURL, "http-proxy", "", "HTTP proxy URL (deprecated, use --http-proxy-url)")
+	flags.StringVar(&opts.HTTPProxy, "http-proxy-url", "", "HTTP proxy URL for cluster egress traffic")
+	flags.StringVar(&opts.HTTPSProxy, "https-proxy-url", "", "HTTPS proxy URL for cluster egress traffic")
 	flags.StringVar(&opts.NoProxy, "no-proxy", "", "Comma-separated list of destinations to bypass proxy")
+	
+	// Audit logging
+	flags.StringVar(&opts.AuditLogRoleARN, "audit-log-arn", "", "AWS IAM role ARN for forwarding audit logs to CloudWatch")
 
 	// Display flags
 	flags.StringVar(&opts.DisplayName, "display-name", "", "Display name for the cluster")

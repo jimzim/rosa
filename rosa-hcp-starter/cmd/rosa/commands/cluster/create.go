@@ -37,6 +37,12 @@ type CreateOptions struct {
 	HostPrefix  int
 	Private     bool
 	PrivateLink bool
+	
+	// Additional Security and VPC Options
+	AdditionalSecurityGroups  []string
+	SharedVPCRoleARN          string
+	PrivateHostedZoneID       string
+	PrivateHostedZoneRoleARN  string
 
 	// Compute Configuration
 	ComputeNodes int
