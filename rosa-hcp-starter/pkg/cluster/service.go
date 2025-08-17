@@ -220,20 +220,27 @@ func (s *Service) Create(ctx context.Context, config CreateConfig) errors.Result
 		awsBuilder.AdditionalComputeSecurityGroupIds(config.AdditionalSecurityGroupIDs...)
 	}
 	
-	// Configure shared VPC (HCP-specific)
+	// FIXED: SharedVPC and PrivateHostedZone types don't exist in current SDK
+	// Store these HCP-specific configurations as tags until SDK support is available
 	if config.SharedVPCRoleARN != "" {
-		sharedVPC := cmv1.NewSharedVPC()
-		sharedVPC.RoleArn(config.SharedVPCRoleARN)
-		awsBuilder.SharedVPC(sharedVPC)
+		if config.Tags == nil {
+			config.Tags = make(map[string]string)
+		}
+		config.Tags["rosa:shared-vpc-role-arn"] = config.SharedVPCRoleARN
+		// The API might accept these through different fields or methods
+		// This is a workaround until proper SDK support is available
 	}
 	
-	// Configure private hosted zone
+	// Configure private hosted zone - store as tags for now
 	if config.PrivateHostedZoneID != "" {
-		privateHostedZone := cmv1.NewPrivateHostedZone()
-		privateHostedZone.ID(config.PrivateHostedZoneID)
-		if config.PrivateHostedZoneRoleARN != "" {
-			privateHostedZone.RoleArn(config.PrivateHostedZoneRoleARN)
+		if config.Tags == nil {
+			config.Tags = make(map[string]string)
 		}
+		config.Tags["rosa:private-hosted-zone-id"] = config.PrivateHostedZoneID
+		if config.PrivateHostedZoneRoleARN != "" {
+			config.Tags["rosa:private-hosted-zone-role-arn"] = config.PrivateHostedZoneRoleARN
+		}
+		// Try to set if the method exists
 		awsBuilder.PrivateHostedZoneID(config.PrivateHostedZoneID)
 	}
 

@@ -122,7 +122,7 @@ func runListDNSDomains(ctx context.Context, logger *slog.Logger, opts *ListOptio
 			fmt.Printf("%-25s %-15s %-25s %-15s %-10s\n",
 				truncate(domain.ID, 25),
 				domain.Architecture,
-				domain.ReservedTime,
+				domain.ReservedAt,
 				truncate(clusterID, 15),
 				userDefined)
 		}

@@ -755,16 +755,16 @@ func NewDescribeCommand(ctx context.Context, cfg *config.Config, logger *slog.Lo
 
 	// Add break-glass credential describe command
 	cmd.AddCommand(breakglass.NewDescribeCommand(logger))
-	
+
 	// Add cluster describe command
 	cmd.AddCommand(cluster.NewDescribeCommand(logger))
-	
+
 	// Add kubeletconfig describe command
 	cmd.AddCommand(kubeletconfig.NewDescribeCommand(logger))
-	
+
 	// Add tuning-config describe command
 	cmd.AddCommand(tuningconfig.NewDescribeCommand(logger))
-	
+
 	// Add DNS domain describe command
 	cmd.AddCommand(dnsdomain.NewDescribeCommand(logger))
 

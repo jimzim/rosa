@@ -174,7 +174,8 @@ func convertDNSDomain(domain *cmv1.DNSDomain) *DNSDomain {
 	}
 
 	// Set reserved time
-	if domain.ReservedAtTimestamp() != nil && !domain.ReservedAtTimestamp().IsZero() {
+	// FIXED: time.Time cannot be compared with nil - check IsZero() instead
+	if !domain.ReservedAtTimestamp().IsZero() {
 		d.ReservedAt = domain.ReservedAtTimestamp().Format("2006-01-02 15:04:05")
 	}
 	

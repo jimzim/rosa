@@ -94,7 +94,7 @@ func runCreateDNSDomain(ctx context.Context, logger *slog.Logger, opts *CreateOp
 	writer.KeyValue(map[string]string{
 		"Domain ID":     domain.ID,
 		"Architecture":  domain.Architecture,
-		"Reserved Time": domain.ReservedTime,
+		"Reserved Time": domain.ReservedAt,
 	})
 
 	// Show next steps
