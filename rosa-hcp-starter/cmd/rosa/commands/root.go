@@ -9,11 +9,13 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
+	"github.com/openshift/rosa-hcp/cmd/rosa/commands/addon"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/admin"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/auth"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/cluster"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/iam"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/idp"
+	"github.com/openshift/rosa-hcp/cmd/rosa/commands/ingress"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/instance"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/kubeletconfig"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/network"
@@ -23,12 +25,14 @@ import (
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/tuningconfig"
 	"github.com/openshift/rosa-hcp/cmd/rosa/commands/version"
 	"github.com/openshift/rosa-hcp/internal/config"
+	addonSvc "github.com/openshift/rosa-hcp/pkg/addon"
 	adminSvc "github.com/openshift/rosa-hcp/pkg/admin"
 	"github.com/openshift/rosa-hcp/pkg/api"
 	"github.com/openshift/rosa-hcp/pkg/aws"
 	clusterSvc "github.com/openshift/rosa-hcp/pkg/cluster"
 	iamSvc "github.com/openshift/rosa-hcp/pkg/iam"
 	idpSvc "github.com/openshift/rosa-hcp/pkg/idp"
+	ingressSvc "github.com/openshift/rosa-hcp/pkg/ingress"
 	instanceSvc "github.com/openshift/rosa-hcp/pkg/instance"
 	kubeletconfigSvc "github.com/openshift/rosa-hcp/pkg/kubeletconfig"
 	networkSvc "github.com/openshift/rosa-hcp/pkg/network"
@@ -92,6 +96,10 @@ configuration of ROSA HCP clusters running on AWS infrastructure.`,
 		NewCreateCommand(ctx, cfg, logger, globalOpts),
 		NewListCommand(ctx, cfg, logger, globalOpts),
 		NewDeleteCommand(ctx, cfg, logger, globalOpts),
+		NewEditCommand(ctx, cfg, logger, globalOpts),
+		NewDescribeCommand(ctx, cfg, logger, globalOpts),
+		NewInstallCommand(ctx, cfg, logger, globalOpts),
+		NewUninstallCommand(ctx, cfg, logger, globalOpts),
 		auth.NewLoginCommand(),
 		auth.NewWhoAmICommand(),
 		NewCompletionCommand(),
@@ -103,20 +111,22 @@ configuration of ROSA HCP clusters running on AWS infrastructure.`,
 
 // Services holds all service instances
 type Services struct {
-	API            api.Client
-	AWS            aws.Client
-	Cluster        *clusterSvc.Service
-	NodePool       *nodepoolSvc.Service
-	OIDC           *oidcSvc.Service
-	Admin          *adminSvc.Service
-	IDP            *idpSvc.Service
-	Version        *versionSvc.Service
-	IAM            iamSvc.Service
-	Network        networkSvc.Service
-	InstanceSvc    instanceSvc.Service
-	RegionSvc      regionSvc.Service
-	KubeletConfig  kubeletconfigSvc.Service
-	TuningConfig   tuningconfigSvc.Service
+	API           api.Client
+	AWS           aws.Client
+	Cluster       *clusterSvc.Service
+	NodePool      *nodepoolSvc.Service
+	OIDC          *oidcSvc.Service
+	Admin         *adminSvc.Service
+	IDP           *idpSvc.Service
+	Version       *versionSvc.Service
+	IAM           iamSvc.Service
+	Network       networkSvc.Service
+	InstanceSvc   instanceSvc.Service
+	RegionSvc     regionSvc.Service
+	KubeletConfig kubeletconfigSvc.Service
+	TuningConfig  tuningconfigSvc.Service
+	Ingress       ingressSvc.Service
+	Addon         addonSvc.Service
 }
 
 // Instance returns the instance service
@@ -192,6 +202,18 @@ func initializeServices(ctx context.Context, cfg *config.Config, logger *slog.Lo
 		return nil, fmt.Errorf("failed to create TuningConfig service: %w", err)
 	}
 
+	// Create Ingress service
+	ingressService, err := ingressSvc.NewService(ctx, logger, apiClient.GetConnection())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Ingress service: %w", err)
+	}
+
+	// Create Addon service
+	addonService, err := addonSvc.NewService(ctx, logger, apiClient.GetConnection())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Addon service: %w", err)
+	}
+
 	// Create services
 	return &Services{
 		API:           apiClient,
@@ -208,6 +230,8 @@ func initializeServices(ctx context.Context, cfg *config.Config, logger *slog.Lo
 		RegionSvc:     regionService,
 		KubeletConfig: kubeletConfigService,
 		TuningConfig:  tuningConfigService,
+		Ingress:       ingressService,
+		Addon:         addonService,
 	}, nil
 }
 
@@ -543,6 +567,9 @@ func NewCreateCommand(ctx context.Context, cfg *config.Config, logger *slog.Logg
 	// Add TuningConfig command
 	cmd.AddCommand(tuningconfig.NewCreateCommand(logger))
 
+	// Add Ingress command
+	cmd.AddCommand(ingress.NewCreateCommand(logger))
+
 	return cmd
 }
 
@@ -584,6 +611,12 @@ func NewListCommand(ctx context.Context, cfg *config.Config, logger *slog.Logger
 	// Add tuning-configs list command
 	cmd.AddCommand(tuningconfig.NewListCommand(logger))
 
+	// Add ingresses list command
+	cmd.AddCommand(ingress.NewListCommand(logger))
+
+	// Add addons list command
+	cmd.AddCommand(addon.NewListCommand(logger))
+
 	return cmd
 }
 
@@ -618,6 +651,69 @@ func NewDeleteCommand(ctx context.Context, cfg *config.Config, logger *slog.Logg
 
 	// Add tuning-config delete command
 	cmd.AddCommand(tuningconfig.NewDeleteCommand(logger))
+
+	// Add ingress delete command
+	cmd.AddCommand(ingress.NewDeleteCommand(logger))
+
+	return cmd
+}
+
+// NewEditCommand creates the edit command with subcommands
+func NewEditCommand(ctx context.Context, cfg *config.Config, logger *slog.Logger, opts *GlobalOptions) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "edit",
+		Short: "Edit HCP resources",
+		Long:  "Edit ROSA HCP resources such as clusters, ingresses, and node pools.",
+	}
+
+	// Add ingress edit command
+	cmd.AddCommand(ingress.NewEditCommand(logger))
+
+	// Add other edit commands that might already exist
+
+	return cmd
+}
+
+// NewDescribeCommand creates the describe command with subcommands
+func NewDescribeCommand(ctx context.Context, cfg *config.Config, logger *slog.Logger, opts *GlobalOptions) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "describe",
+		Short: "Describe HCP resources",
+		Long:  "Show detailed information about ROSA HCP resources.",
+	}
+
+	// Add ingress describe command
+	cmd.AddCommand(ingress.NewDescribeCommand(logger))
+
+	// Add other describe commands that might already exist
+
+	return cmd
+}
+
+// NewInstallCommand creates the install command with subcommands
+func NewInstallCommand(ctx context.Context, cfg *config.Config, logger *slog.Logger, opts *GlobalOptions) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "install",
+		Short: "Install add-ons and components",
+		Long:  "Install Red Hat managed add-ons and components to ROSA HCP clusters.",
+	}
+
+	// Add addon install command
+	cmd.AddCommand(addon.NewInstallCommand(logger))
+
+	return cmd
+}
+
+// NewUninstallCommand creates the uninstall command with subcommands
+func NewUninstallCommand(ctx context.Context, cfg *config.Config, logger *slog.Logger, opts *GlobalOptions) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "uninstall",
+		Short: "Uninstall add-ons and components",
+		Long:  "Uninstall Red Hat managed add-ons and components from ROSA HCP clusters.",
+	}
+
+	// Add addon uninstall command
+	cmd.AddCommand(addon.NewUninstallCommand(logger))
 
 	return cmd
 }
